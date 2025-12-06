@@ -10,11 +10,13 @@ import org.mapstruct.*;
 @Mapper(componentModel = "spring",
         uses = {RoleMapper.class, PermissionMapper.class,UserDevicePermissionMapper.class})
 public interface UserMapper {
+
+    @Mapping(target = "roles", ignore = true)
     User toUser(UserCreationRequest request);
 
     UserResponse toUserResponse(User user);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "roles", ignore = true)
-    void updateUser(@MappingTarget UserUpdateRequest request);
+    void updateUser(@MappingTarget User user, UserUpdateRequest request);
 }
