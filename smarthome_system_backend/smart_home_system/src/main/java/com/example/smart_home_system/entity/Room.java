@@ -25,4 +25,9 @@ public class Room extends BaseEntity{
 
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL)
     Set<Device> devices = new HashSet<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "home_id")
+    Home home;
+
 }

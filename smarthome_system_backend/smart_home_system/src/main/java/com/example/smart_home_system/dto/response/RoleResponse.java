@@ -7,5 +7,5 @@ import java.util.Set;
 public class RoleResponse {
     String name;
     String description;
-    Set<PermissionMapper> permissions;
+    Set<PermissionResponse> permissions;
 }

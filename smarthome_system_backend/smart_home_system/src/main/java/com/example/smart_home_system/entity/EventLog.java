@@ -7,23 +7,43 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "event_logs")
-@Data
+@Table(name = "event_logs", indexes = {
+        @Index(name = "idx_event_home", columnList = "home_id"),
+        @Index(name = "idx_event_device", columnList = "device_id"),
+        @Index(name = "idx_event_user", columnList = "user_id"),
+        @Index(name = "idx_event_created", columnList = "created_at"),
+        @Index(name = "idx_event_type", columnList = "event_type")
+})
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class EventLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    Long id;
 
-    private Long deviceId;
-    private Long homeId;
-    private Long userId;          // optional: null nếu event do automation
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "device_id")
+    Device device;
 
-    private String source;        // DEVICE, AUTOMATION, USER
-    private String eventType;     // SENSOR_UPDATE, ACTION_EXECUTED, ERROR...
-    private String eventValue;    // json {"temp":29}
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "home_id")
+    Home home;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    User user;
+
+    String source;
+    String eventType;
+
+    @Column(columnDefinition = "json")
+    String eventValue;
 
     @CreationTimestamp
-    private LocalDateTime createdAt;
+    LocalDateTime createdAt;
 }
 

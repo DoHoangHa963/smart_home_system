@@ -1,1 +1,34 @@
-spring.application.name=smart_home_system
+#file: noinspection SpringBootApplicationYaml
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    url: "jdbc:mysql://localhost:3307/smart_home?createDatabaseIfNotExist=true"
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  jackson:
+    default-property-inclusion: non_null
+    serialization:write-dates-as-timestamps: false
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    com.example.smart_home_system.configuration: DEBUG
+
+jwt:
+  expiration: 86400 #in seconds
+  refreshable-duration: 36000 # in seconds
+  secret: "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"

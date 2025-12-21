@@ -6,14 +6,16 @@ import com.example.smart_home_system.dto.response.UserResponse;
 import com.example.smart_home_system.entity.User;
 import com.example.smart_home_system.entity.UserDevicePermission;
 import org.mapstruct.*;
+import org.springframework.stereotype.Component;
 
 @Mapper(componentModel = "spring",
-        uses = {RoleMapper.class, PermissionMapper.class,UserDevicePermissionMapper.class})
+        uses = {RoleMapper.class, PermissionMapper.class, UserDevicePermissionMapper.class})
 public interface UserMapper {
 
     @Mapping(target = "roles", ignore = true)
     User toUser(UserCreationRequest request);
 
+    @Mapping(target = "roles", source = "roles", qualifiedByName = "rolesToStringSet")
     UserResponse toUserResponse(User user);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
