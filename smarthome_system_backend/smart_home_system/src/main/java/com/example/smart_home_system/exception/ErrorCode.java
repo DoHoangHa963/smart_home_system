@@ -133,6 +133,8 @@ public enum ErrorCode {
     GROUP_NAME_EXISTS(5070, "Device group with this name already exists", HttpStatus.CONFLICT),
     GROUP_HAS_DEVICES(5071, "Cannot delete group with devices", HttpStatus.CONFLICT),
     DEVICE_ALREADY_IN_GROUP(5072, "Device is already in this group", HttpStatus.CONFLICT),
+    PERMISSION_ALREADY_EXISTS(5090, "Permission already exists", HttpStatus.CONFLICT),
+    ROLE_ALREADY_EXISTS(5091, "Role already exists", HttpStatus.CONFLICT),
 
     // 6xxx - Device/Hardware Errors
     DEVICE_ERROR(6000, "Device error occurred", HttpStatus.INTERNAL_SERVER_ERROR),
@@ -177,7 +179,8 @@ public enum ErrorCode {
     FILE_SIZE_EXCEEDED(9009, "File size exceeds maximum limit", HttpStatus.PAYLOAD_TOO_LARGE),
     UNSUPPORTED_FILE_TYPE(9010, "Unsupported file type", HttpStatus.UNSUPPORTED_MEDIA_TYPE),
     ENCRYPTION_ERROR(9011, "Data encryption/decryption failed", HttpStatus.INTERNAL_SERVER_ERROR),
-    CACHE_ERROR(9012, "Cache service error", HttpStatus.INTERNAL_SERVER_ERROR);
+    CACHE_ERROR(9012, "Cache service error", HttpStatus.INTERNAL_SERVER_ERROR),
+    CLASS_CAST_ERROR(9013, "Type conversion error", HttpStatus.INTERNAL_SERVER_ERROR);
 
     ErrorCode(int code, String message, HttpStatus status) {
         this.code = code;

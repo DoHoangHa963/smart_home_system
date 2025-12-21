@@ -9,7 +9,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+        @Index(name = "idx_user_status", columnList = "status"),
+        @Index(name = "idx_user_email", columnList = "email")
+})
 @Getter
 @Setter
 @Builder
@@ -31,13 +34,12 @@ public class User extends BaseEntity {
     String password;
 
     String phone;
-
     String avatarUrl;
 
     @Enumerated(EnumType.STRING)
     UserStatus status;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
             @JoinTable(
                     name = "user_roles",
                     joinColumns = @JoinColumn(name = "user_id"),
@@ -45,6 +47,9 @@ public class User extends BaseEntity {
             )
     Set<Role> roles = new HashSet<>();
 
-    @OneToMany
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     Set<UserDevicePermission> devicePermissions = new HashSet<>();
+
+    @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL)
+    Set<Home> ownedHomes = new HashSet<>();
 }

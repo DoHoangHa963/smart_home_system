@@ -6,11 +6,12 @@ import com.example.smart_home_system.dto.response.UserResponse;
 import com.example.smart_home_system.entity.User;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface UserService {
     UserResponse createUser(UserCreationRequest request);
 
-    UserResponse updateUser(UserUpdateRequest request);
+    UserResponse updateUser(String userId, UserUpdateRequest request);
 
     UserResponse getMyInfo();
 

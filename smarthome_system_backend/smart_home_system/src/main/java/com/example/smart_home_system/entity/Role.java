@@ -16,7 +16,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Role {
+public class Role extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     Long id;
@@ -25,7 +25,7 @@ public class Role {
     @Enumerated(EnumType.STRING)
     RoleType name;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "role_permissions",
             joinColumns = @JoinColumn(name = "role_id"),

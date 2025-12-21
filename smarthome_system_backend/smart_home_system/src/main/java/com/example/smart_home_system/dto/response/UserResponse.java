@@ -11,17 +11,17 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserResponse {
-    String id;
-    String username;
-    String email;
-    String phone;
-    String avatarUrl;
-    UserStatus userStatus;
-
-    Set<RoleResponse> roles;
+    private String id;
+    private String username;
+    private String email;
+    private String phone;
+    private String avatarUrl;
+    private UserStatus status;
+    private Set<String> roles;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

@@ -16,7 +16,7 @@ public class DeviceAction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String actionCode; // TURN_ON, SET_TEMP, etc.
+    private String actionCode;
 
     @ManyToOne
     @JoinColumn(name = "device_id")

@@ -29,5 +29,4 @@ public class UserCreationRequest {
     String avatarUrl;
 
     Set<String> roles;
-
 }

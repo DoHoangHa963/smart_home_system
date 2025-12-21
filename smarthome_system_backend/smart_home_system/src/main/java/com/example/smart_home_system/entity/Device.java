@@ -10,7 +10,12 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "devices")
+@Table(name = "devices", indexes = {
+        @Index(name = "idx_device_status", columnList = "status"),
+        @Index(name = "idx_device_type", columnList = "type"),
+        @Index(name = "idx_device_room", columnList = "room_id"),
+        @Index(name = "idx_device_code", columnList = "device_code")
+})
 @Getter
 @Setter
 @NoArgsConstructor

@@ -10,31 +10,36 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "automations")
-@Data
-public class Automation {
+@Table(name = "automations", indexes = {
+        @Index(name = "idx_automation_home", columnList = "home_id"),
+        @Index(name = "idx_automation_enabled", columnList = "enabled")
+})
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Automation extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    Long id;
 
-    private Long homeId;   // FK -> Home
-    private String name;
-    private String description;
-    private Boolean enabled = true;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "home_id", nullable = false)
+    Home home;
 
-    @CreationTimestamp
-    private LocalDateTime createdAt;
+    @Column(nullable = false)
+    String name;
+    String description;
 
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
+    @Column(nullable = false)
+    Boolean enabled = true;
 
-    private LocalDateTime deletedAt;
-
-    @OneToMany(mappedBy = "automation", cascade = CascadeType.ALL)
-    private Set<AutomationTrigger> triggers = new HashSet<>();
 
     @OneToMany(mappedBy = "automation", cascade = CascadeType.ALL)
-    private Set<AutomationAction> actions = new HashSet<>();
+    Set<AutomationTrigger> triggers = new HashSet<>();
+
+    @OneToMany(mappedBy = "automation", cascade = CascadeType.ALL)
+    Set<AutomationAction> actions = new HashSet<>();
 }
-
