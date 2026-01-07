@@ -2,14 +2,11 @@ package com.example.smart_home_system.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
-
 @Entity
 @Table(name = "homes")
 @Getter
@@ -30,15 +27,18 @@ public class Home extends BaseEntity {
     String timeZone;
 
     @ManyToOne(fetch = FetchType.LAZY)
-            @JoinColumn(name = "owner_id")
+    @JoinColumn(name = "owner_id")
     User owner;
 
-    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     Set<Room> rooms = new HashSet<>();
 
-    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL)
-            Set<Automation> automations = new HashSet<>();
+    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    Set<Automation> automations = new HashSet<>();
 
-    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL)
-            Set<Scene> scenes = new HashSet<>();
+    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    Set<Scene> scenes = new HashSet<>();
+
+    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    Set<HomeMember> members = new HashSet<>();
 }

@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-@Service
+@Service("deviceService")
 @RequiredArgsConstructor
 public class DeviceServiceImpl implements DeviceService {
 

@@ -1,13 +1,8 @@
-package com.example.devteria.dto.request;
+package com.example.smart_home_system.dto.request;
 
 import lombok.*;
-import lombok.experimental.FieldDefaults;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class RefreshTokenRequest {
-    String token;
+    private String refreshToken;
 }
