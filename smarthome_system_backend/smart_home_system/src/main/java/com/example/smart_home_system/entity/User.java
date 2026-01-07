@@ -52,4 +52,7 @@ public class User extends BaseEntity {
 
     @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL)
     Set<Home> ownedHomes = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    Set<HomeMember> homeMemberships = new HashSet<>();
 }

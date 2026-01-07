@@ -30,7 +30,7 @@ public interface RoleMapper {
             return null;
         }
         return roles.stream()
-                .map(this::roleToString)
+                .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
     }
 }

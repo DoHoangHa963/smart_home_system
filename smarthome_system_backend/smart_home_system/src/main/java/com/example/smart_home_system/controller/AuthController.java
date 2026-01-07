@@ -1,10 +1,7 @@
 package com.example.smart_home_system.controller;
 
 import com.example.smart_home_system.constant.RequestApi;
-import com.example.smart_home_system.dto.request.ChangePasswordRequest;
-import com.example.smart_home_system.dto.request.LoginRequest;
-import com.example.smart_home_system.dto.request.RegisterRequest;
-import com.example.smart_home_system.dto.request.UpdateProfileRequest;
+import com.example.smart_home_system.dto.request.*;
 import com.example.smart_home_system.dto.response.ApiResponse;
 import com.example.smart_home_system.dto.response.AuthResponse;
 import com.example.smart_home_system.dto.response.UserResponse;
@@ -57,6 +54,11 @@ public class AuthController {
             @Valid @RequestBody ChangePasswordRequest request) throws BadRequestException {
         authService.changePassword(request);
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
+    }
+
+    @PostMapping(value = RequestApi.AUTH_REFRESH_TOKEN)
+    public ResponseEntity<AuthResponse> refreshToken(@RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refreshToken(request));
     }
 
     @PostMapping(value = RequestApi.AUTH_LOGOUT)

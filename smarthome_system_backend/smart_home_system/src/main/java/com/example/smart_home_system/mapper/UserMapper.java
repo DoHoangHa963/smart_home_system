@@ -4,9 +4,9 @@ import com.example.smart_home_system.dto.request.UserCreationRequest;
 import com.example.smart_home_system.dto.request.UserUpdateRequest;
 import com.example.smart_home_system.dto.response.UserResponse;
 import com.example.smart_home_system.entity.User;
-import com.example.smart_home_system.entity.UserDevicePermission;
 import org.mapstruct.*;
-import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Mapper(componentModel = "spring",
         uses = {RoleMapper.class, PermissionMapper.class, UserDevicePermissionMapper.class})

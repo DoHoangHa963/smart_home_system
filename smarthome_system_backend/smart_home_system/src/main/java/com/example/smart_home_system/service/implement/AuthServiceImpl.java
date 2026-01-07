@@ -1,12 +1,10 @@
 package com.example.smart_home_system.service.implement;
 
 import com.example.smart_home_system.dto.CustomUserDetails;
-import com.example.smart_home_system.dto.request.ChangePasswordRequest;
-import com.example.smart_home_system.dto.request.LoginRequest;
-import com.example.smart_home_system.dto.request.RegisterRequest;
-import com.example.smart_home_system.dto.request.UpdateProfileRequest;
+import com.example.smart_home_system.dto.request.*;
 import com.example.smart_home_system.dto.response.AuthResponse;
 import com.example.smart_home_system.dto.response.UserResponse;
+import com.example.smart_home_system.entity.RefreshToken;
 import com.example.smart_home_system.entity.Role;
 import com.example.smart_home_system.entity.User;
 import com.example.smart_home_system.enums.RoleType;
@@ -45,6 +43,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${jwt.expiration}")
     private Long jwtExpiration;
@@ -87,8 +86,11 @@ public class AuthServiceImpl implements AuthService {
 
         String token = jwtTokenProvider.generateToken(authentication);
 
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser.getId());
+
         return AuthResponse.builder()
                 .accessToken(token)
+                .refreshToken(refreshToken.getToken())
                 .tokenType("Bearer")
                 .expiresIn(jwtExpiration)
                 .user(userMapper.toUserResponse(savedUser))
@@ -123,8 +125,38 @@ public class AuthServiceImpl implements AuthService {
 
         String token = jwtTokenProvider.generateToken(authentication);
 
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+
         return AuthResponse.builder()
                 .accessToken(token)
+                .refreshToken(refreshToken.getToken())
+                .tokenType("Bearer")
+                .expiresIn(jwtExpiration)
+                .user(userMapper.toUserResponse(user))
+                .build();
+    }
+
+    @Override
+    public AuthResponse refreshToken(RefreshTokenRequest request) {
+        RefreshToken token = refreshTokenService.findByToken(request.getRefreshToken());
+
+        token = refreshTokenService.verifyExpiration(token);
+
+        User user = token.getUser();
+
+        CustomUserDetails userDetails = new CustomUserDetails(user);
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                userDetails,
+                null,
+                userDetails.getAuthorities()
+        );
+
+        String newAccessToken = jwtTokenProvider.generateToken(authentication);
+
+        return AuthResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(request.getRefreshToken())
                 .tokenType("Bearer")
                 .expiresIn(jwtExpiration)
                 .user(userMapper.toUserResponse(user))
@@ -194,6 +226,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void logout() {
         String userId = getCurrentUserId();
+        refreshTokenService.deleteByUserId(userId);
         SecurityContextHolder.clearContext();
     }
 

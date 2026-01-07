@@ -40,6 +40,7 @@ public class RequestApi {
     public static final String HOME = API_VERSION + "/homes";
     public static final String HOME_CREATE = "";
     public static final String HOME_GET_BY_ID = "/{homeId}";
+    public static final String HOME_WITH_MEMBERS = "/{homeId}/with-members";
     public static final String HOME_UPDATE = "/{homeId}";
     public static final String HOME_DELETE = "/{homeId}";
     public static final String HOME_LIST = "";
@@ -50,6 +51,7 @@ public class RequestApi {
     public static final String HOME_ADD_MEMBER = "/{homeId}/members";
     public static final String HOME_REMOVE_MEMBER = "/{homeId}/members/{userId}";
     public static final String HOME_UPDATE_MEMBER_ROLE = "/{homeId}/members/{userId}/role";
+    public static final String HOME_MEMBER_PERMISSIONS = "/{homeId}/members/{userId}/permissions";
     public static final String HOME_LEAVE = "/{homeId}/leave";
     public static final String HOME_TRANSFER_OWNERSHIP = "/{homeId}/transfer-ownership";
 

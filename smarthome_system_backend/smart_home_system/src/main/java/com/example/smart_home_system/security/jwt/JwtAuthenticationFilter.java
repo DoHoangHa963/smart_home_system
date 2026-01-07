@@ -24,7 +24,7 @@ import java.util.List;
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider jwtTokenProvider;
-    private final CustomUserDetailService customUserDetailService;
+    private final CustomUserDetailService customUserDetailService; // Inject service này vào
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -36,15 +36,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
             String username = jwtTokenProvider.getUsernameFromToken(token);
 
-            // Lấy authorities từ TOKEN (scope claim)
-            List<GrantedAuthority> authorities = jwtTokenProvider.getAuthoritiesFromToken(token);
+            // Việc này trả về CustomUserDetails chứa full thông tin (ID, Email, Role...)
+            UserDetails userDetails = customUserDetailService.loadUserByUsername(username);
 
-            // KHÔNG load từ database nữa (hoặc kết hợp nếu cần)
+            // Tạo Authentication object với Principal là userDetails (Object) chứ không phải username (String)
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    username,
+                    userDetails,
                     null,
-                    authorities  // Dùng authorities từ token
+                    userDetails.getAuthorities()
             );
+
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
