@@ -1,0 +1,227 @@
+export enum SystemRole {
+  ADMIN = 'ADMIN',  // Quản trị viên hệ thống
+  USER = 'USER'      // Người dùng thường
+}
+
+export enum HomeRole {
+  OWNER = 'OWNER',    // Chủ nhà - full quyền
+  ADMIN = 'ADMIN',    // Quản trị viên nhà
+  MEMBER = 'MEMBER',  // Thành viên
+  GUEST = 'GUEST',     // Khách
+  CUSTOM = 'CUSTOM'
+}
+
+export const SYSTEM_PERMISSIONS = {
+  // User management
+  SYSTEM_USER_VIEW: 'SYSTEM_USER_VIEW',
+  SYSTEM_USER_CREATE: 'SYSTEM_USER_CREATE',
+  SYSTEM_USER_UPDATE: 'SYSTEM_USER_UPDATE',
+  SYSTEM_USER_DELETE: 'SYSTEM_USER_DELETE',
+  SYSTEM_USER_MANAGE: 'SYSTEM_USER_MANAGE',
+
+  // Home management (system level)
+  SYSTEM_HOME_VIEW: 'SYSTEM_HOME_VIEW',
+  SYSTEM_HOME_MANAGE: 'SYSTEM_HOME_MANAGE',
+  SYSTEM_HOME_DELETE: 'SYSTEM_HOME_DELETE',
+
+  // System settings
+  SYSTEM_SETTINGS_VIEW: 'SYSTEM_SETTINGS_VIEW',
+  SYSTEM_SETTINGS_MANAGE: 'SYSTEM_SETTINGS_MANAGE',
+
+  // Logs & Analytics
+  SYSTEM_LOGS_VIEW: 'SYSTEM_LOGS_VIEW',
+  SYSTEM_ANALYTICS_VIEW: 'SYSTEM_ANALYTICS_VIEW',
+} as const;
+
+export const HOME_PERMISSIONS = {
+  // Dashboard
+  HOME_DASHBOARD_VIEW: 'HOME_DASHBOARD_VIEW',
+
+  // Device permissions
+  DEVICE_VIEW: 'DEVICE_VIEW',
+  DEVICE_CONTROL: 'DEVICE_CONTROL',
+  DEVICE_CREATE: 'DEVICE_CREATE',
+  DEVICE_UPDATE: 'DEVICE_UPDATE',
+  DEVICE_DELETE: 'DEVICE_DELETE',
+
+  // Room permissions
+  ROOM_VIEW: 'ROOM_VIEW',
+  ROOM_CREATE: 'ROOM_CREATE',
+  ROOM_UPDATE: 'ROOM_UPDATE',
+  ROOM_DELETE: 'ROOM_DELETE',
+
+  // Automation permissions
+  AUTOMATION_VIEW: 'AUTOMATION_VIEW',
+  AUTOMATION_CREATE: 'AUTOMATION_CREATE',
+  AUTOMATION_UPDATE: 'AUTOMATION_UPDATE',
+  AUTOMATION_DELETE: 'AUTOMATION_DELETE',
+  AUTOMATION_EXECUTE: 'AUTOMATION_EXECUTE',
+
+  // Scene permissions
+  SCENE_VIEW: 'SCENE_VIEW',
+  SCENE_CREATE: 'SCENE_CREATE',
+  SCENE_UPDATE: 'SCENE_UPDATE',
+  SCENE_DELETE: 'SCENE_DELETE',
+  SCENE_EXECUTE: 'SCENE_EXECUTE',
+
+  // Member permissions
+  MEMBER_VIEW: 'MEMBER_VIEW',
+  MEMBER_INVITE: 'MEMBER_INVITE',
+  MEMBER_UPDATE: 'MEMBER_UPDATE',
+  MEMBER_REMOVE: 'MEMBER_REMOVE',
+
+  // Home settings
+  HOME_SETTINGS_VIEW: 'HOME_SETTINGS_VIEW',
+  HOME_SETTINGS_UPDATE: 'HOME_SETTINGS_UPDATE',
+
+  // Logs
+  HOME_LOGS_VIEW: 'HOME_LOGS_VIEW',
+} as const;
+
+export type SystemPermission = typeof SYSTEM_PERMISSIONS[keyof typeof SYSTEM_PERMISSIONS];
+export type HomePermission = typeof HOME_PERMISSIONS[keyof typeof HOME_PERMISSIONS];
+export type Permission = SystemPermission | HomePermission;
+
+export const HOME_ROLE_HIERARCHY: Record<HomeRole, number> = {
+  [HomeRole.OWNER]: 4,
+  [HomeRole.ADMIN]: 3,
+  [HomeRole.MEMBER]: 2,
+  [HomeRole.GUEST]: 1,
+  [HomeRole.CUSTOM]: 0,
+  
+};
+
+export const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
+  [HomeRole.OWNER]: [
+    // Full access to everything
+    HOME_PERMISSIONS.HOME_DASHBOARD_VIEW,
+    HOME_PERMISSIONS.DEVICE_VIEW,
+    HOME_PERMISSIONS.DEVICE_CONTROL,
+    HOME_PERMISSIONS.DEVICE_CREATE,
+    HOME_PERMISSIONS.DEVICE_UPDATE,
+    HOME_PERMISSIONS.DEVICE_DELETE,
+    HOME_PERMISSIONS.ROOM_VIEW,
+    HOME_PERMISSIONS.ROOM_CREATE,
+    HOME_PERMISSIONS.ROOM_UPDATE,
+    HOME_PERMISSIONS.ROOM_DELETE,
+    HOME_PERMISSIONS.AUTOMATION_VIEW,
+    HOME_PERMISSIONS.AUTOMATION_CREATE,
+    HOME_PERMISSIONS.AUTOMATION_UPDATE,
+    HOME_PERMISSIONS.AUTOMATION_DELETE,
+    HOME_PERMISSIONS.AUTOMATION_EXECUTE,
+    HOME_PERMISSIONS.SCENE_VIEW,
+    HOME_PERMISSIONS.SCENE_CREATE,
+    HOME_PERMISSIONS.SCENE_UPDATE,
+    HOME_PERMISSIONS.SCENE_DELETE,
+    HOME_PERMISSIONS.SCENE_EXECUTE,
+    HOME_PERMISSIONS.MEMBER_VIEW,
+    HOME_PERMISSIONS.MEMBER_INVITE,
+    HOME_PERMISSIONS.MEMBER_UPDATE,
+    HOME_PERMISSIONS.MEMBER_REMOVE,
+    HOME_PERMISSIONS.HOME_SETTINGS_VIEW,
+    HOME_PERMISSIONS.HOME_SETTINGS_UPDATE,
+    HOME_PERMISSIONS.HOME_LOGS_VIEW,
+  ],
+
+  [HomeRole.ADMIN]: [
+    HOME_PERMISSIONS.HOME_DASHBOARD_VIEW,
+    HOME_PERMISSIONS.DEVICE_VIEW,
+    HOME_PERMISSIONS.DEVICE_CONTROL,
+    HOME_PERMISSIONS.DEVICE_CREATE,
+    HOME_PERMISSIONS.DEVICE_UPDATE,
+    HOME_PERMISSIONS.DEVICE_DELETE,
+    HOME_PERMISSIONS.ROOM_VIEW,
+    HOME_PERMISSIONS.ROOM_CREATE,
+    HOME_PERMISSIONS.ROOM_UPDATE,
+    HOME_PERMISSIONS.ROOM_DELETE,
+    HOME_PERMISSIONS.AUTOMATION_VIEW,
+    HOME_PERMISSIONS.AUTOMATION_CREATE,
+    HOME_PERMISSIONS.AUTOMATION_UPDATE,
+    HOME_PERMISSIONS.AUTOMATION_DELETE,
+    HOME_PERMISSIONS.AUTOMATION_EXECUTE,
+    HOME_PERMISSIONS.SCENE_VIEW,
+    HOME_PERMISSIONS.SCENE_CREATE,
+    HOME_PERMISSIONS.SCENE_UPDATE,
+    HOME_PERMISSIONS.SCENE_DELETE,
+    HOME_PERMISSIONS.SCENE_EXECUTE,
+    HOME_PERMISSIONS.MEMBER_VIEW,
+    HOME_PERMISSIONS.MEMBER_INVITE,
+    HOME_PERMISSIONS.HOME_SETTINGS_VIEW,
+    HOME_PERMISSIONS.HOME_LOGS_VIEW,
+  ],
+
+  [HomeRole.MEMBER]: [
+    HOME_PERMISSIONS.HOME_DASHBOARD_VIEW,
+    HOME_PERMISSIONS.DEVICE_VIEW,
+    HOME_PERMISSIONS.DEVICE_CONTROL,
+    HOME_PERMISSIONS.ROOM_VIEW,
+    HOME_PERMISSIONS.AUTOMATION_VIEW,
+    HOME_PERMISSIONS.AUTOMATION_EXECUTE,
+    HOME_PERMISSIONS.SCENE_VIEW,
+    HOME_PERMISSIONS.SCENE_EXECUTE,
+    HOME_PERMISSIONS.MEMBER_VIEW,
+  ],
+
+  [HomeRole.GUEST]: [
+    HOME_PERMISSIONS.HOME_DASHBOARD_VIEW,
+    HOME_PERMISSIONS.DEVICE_VIEW,
+    HOME_PERMISSIONS.ROOM_VIEW,
+    HOME_PERMISSIONS.MEMBER_VIEW,
+  ],
+  
+  [HomeRole.CUSTOM]: [],
+};
+
+export const hasPermission = (
+  userPermissions: Permission[],
+  required: Permission | Permission[]
+): boolean => {
+  const requiredPerms = Array.isArray(required) ? required : [required];
+  return requiredPerms.every(perm => userPermissions.includes(perm));
+};
+
+/**
+ * Check if user has ANY of the required permissions
+ */
+export const hasAnyPermission = (
+  userPermissions: Permission[],
+  required: Permission[]
+): boolean => {
+  return required.some(perm => userPermissions.includes(perm));
+};
+
+/**
+ * Check if user has specific home role or higher
+ */
+export const hasHomeRole = (
+  userRole: HomeRole,
+  requiredRole: HomeRole
+): boolean => {
+  return HOME_ROLE_HIERARCHY[userRole] >= HOME_ROLE_HIERARCHY[requiredRole];
+};
+
+/**
+ * Check if user is system admin
+ */
+export const isSystemAdmin = (roles: string[]): boolean => {
+  return roles.includes(SystemRole.ADMIN);
+};
+
+/**
+ * Get permissions for a home role
+ */
+export const getHomeRolePermissions = (role: HomeRole): HomePermission[] => {
+  return HOME_ROLE_PERMISSIONS[role] || [];
+};
+
+/**
+ * Parse permissions from JSON string
+ */
+export const parsePermissions = (permissionsJson?: string): Permission[] => {
+  if (!permissionsJson) return [];
+  try {
+    return JSON.parse(permissionsJson) as Permission[];
+  } catch {
+    return [];
+  }
+};
