@@ -4,6 +4,6 @@ public enum DeviceStatus {
     ONLINE,
     OFFLINE,
     ERROR,
-    UNKNOWN
+    ACTIVE, INACTIVE, UNKNOWN
 }
 

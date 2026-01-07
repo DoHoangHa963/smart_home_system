@@ -5,24 +5,39 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
-@Table(name = "scenes")
-@Data
+@Table(name = "scenes", indexes = {
+        @Index(name = "idx_scene_home", columnList = "home_id"),
+        @Index(name = "idx_scene_enabled", columnList = "enabled")
+})
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Scene {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    Long id;
 
-    private Long homeId;
-    private String name;
-    private Boolean enabled = true;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "home_id", nullable = false)
+    Home home;
+
+    @Column(nullable = false)
+    String name;
+
+    @Column(nullable = false)
+    Boolean enabled = true;
 
     @CreationTimestamp
-    private LocalDateTime createdAt;
+    LocalDateTime createdAt;
 
-    @OneToMany(mappedBy = "scene", cascade = CascadeType.ALL)
-    private Set<SceneAction> actions = new HashSet<>();
+    @OneToMany(mappedBy = "scene", cascade = CascadeType.ALL, orphanRemoval = true)
+    Set<SceneAction> actions = new HashSet<>();
 }
 

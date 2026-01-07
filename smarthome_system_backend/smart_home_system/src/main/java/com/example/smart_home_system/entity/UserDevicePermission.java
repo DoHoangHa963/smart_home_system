@@ -5,7 +5,10 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 @Entity
-@Table(name = "user_device_permission")
+@Table(name = "user_device_permission", indexes = {
+        @Index(name = "idx_permission_user", columnList = "user_id"),
+        @Index(name = "idx_permission_device", columnList = "device_id")
+})
 @Getter
 @Setter
 @Builder
@@ -17,16 +20,18 @@ public class UserDevicePermission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     User user;
 
-    @ManyToOne
-    @JoinColumn(name = "device_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "device_id", nullable = false)
     Device device;
 
+    @Column(nullable = false)
     boolean canView;
 
+    @Column(nullable = false)
     boolean canControl;
 
     @Column(columnDefinition = "json")
