@@ -1,4 +1,3 @@
-// pages/Members.tsx
 import { useEffect, useState } from 'react';
 import { usePermission } from '@/hooks/usePermission';
 import { useHomeStore } from '@/store/homeStore';
@@ -40,12 +39,6 @@ export default function Members() {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [selectedMember, setSelectedMember] = useState<HomeMember | null>(null);
-
-  useEffect(() => {
-    if (currentHome) {
-      fetchHomeMembers(currentHome.id);
-    }
-  }, [currentHome]);
 
   const handleRemoveMember = async () => {
     if (!currentHome || !selectedMember) return;
