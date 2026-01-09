@@ -6,16 +6,15 @@ import { toast } from 'sonner';
 
 const extractData = (data: any) => {
   if (data?.content && Array.isArray(data.content)) {
-    return data.content; // Trả về mảng trong Page
+    return data.content;
   }
   if (Array.isArray(data)) {
-    return data; // Trả về mảng gốc
+    return data;
   }
-  return []; // Mặc định rỗng
+  return [];
 };
 
 interface HomeState {
-  // State
   homes: Home[];
   currentHome: Home | null;
   currentMember: HomeMember | null;
@@ -23,7 +22,6 @@ interface HomeState {
   isLoading: boolean;
   error: string | null;
 
-  // Home Actions
   fetchMyHomes: () => Promise<void>;
   setCurrentHome: (home: Home | null) => Promise<void>;
   createHome: (name: string, address?: string, timeZone?: string) => Promise<Home>;
@@ -32,13 +30,11 @@ interface HomeState {
   leaveHome: (homeId: number) => Promise<void>;
   transferOwnership: (homeId: number, newOwnerId: string) => Promise<void>;
 
-  // Member Actions
   fetchHomeMembers: (homeId: number) => Promise<void>;
   addMember: (homeId: number, identifier: string, role?: string) => Promise<void>;
   removeMember: (homeId: number, userId: string) => Promise<void>;
   updateMemberRole: (homeId: number, userId: string, newRole: string) => Promise<void>;
 
-  // Helpers
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -58,20 +54,15 @@ export const useHomeStore = create<HomeState>()(
     (set, get) => ({
       ...initialState,
 
-      // ============================================
-      // HOME ACTIONS
-      // ============================================
-        fetchMyHomes: async () => {
+      fetchMyHomes: async () => {
         set({ isLoading: true, error: null });
         try {
           const response = await homeApi.getMyHomes();
-          // Sử dụng hàm helper để code gọn hơn
           const homesArray = extractData(response.data);
           set({ homes: homesArray, isLoading: false });
         } catch (error: any) {
           const errorMsg = error.response?.data?.message || 'Failed to fetch homes';
           set({ error: errorMsg, isLoading: false });
-          // toast.error(errorMsg); // Có thể comment lại để tránh spam toast lúc init
         }
       },
 
@@ -84,13 +75,12 @@ export const useHomeStore = create<HomeState>()(
         }
 
         try {
-          // Fetch members để lấy thông tin currentMember
           const membersResponse = await homeApi.getHomeMembers(home.id);
           const members = membersResponse.data;
 
-          // Tìm member hiện tại (dựa vào userId từ auth)
-          // Giả sử bạn có cách lấy userId hiện tại
-          const userId = localStorage.getItem('userId'); // Hoặc từ authStore
+          const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+          const userId = authState.state?.user?.id || authState.state?.user?.userId;
+          
           const currentMember = members.find(m => m.userId === userId) || null;
 
           set({
@@ -196,7 +186,6 @@ export const useHomeStore = create<HomeState>()(
         try {
           await homeApi.transferOwnership(homeId, newOwnerId);
 
-          // Re-fetch home data after transfer
           await get().fetchMyHomes();
           if (get().currentHome?.id === homeId) {
             const updatedHome = get().homes.find(h => h.id === homeId);
@@ -214,15 +203,10 @@ export const useHomeStore = create<HomeState>()(
         }
       },
 
-      // ============================================
-      // MEMBER ACTIONS
-      // ============================================
-
       fetchHomeMembers: async (homeId: number) => {
         set({ isLoading: true, error: null });
         try {
           const response = await homeApi.getHomeMembers(homeId);
-          // FIX: Áp dụng extractData ở đây nữa
           const membersArray = extractData(response.data);
           set({ members: membersArray, isLoading: false });
         } catch (error: any) {
@@ -241,7 +225,6 @@ export const useHomeStore = create<HomeState>()(
             role: role as any,
           });
 
-          // Re-fetch members
           await get().fetchHomeMembers(homeId);
 
           toast.success('Thêm thành viên thành công!');
@@ -294,10 +277,6 @@ export const useHomeStore = create<HomeState>()(
           throw error;
         }
       },
-
-      // ============================================
-      // HELPERS
-      // ============================================
 
       setLoading: (loading) => set({ isLoading: loading }),
       setError: (error) => set({ error }),
