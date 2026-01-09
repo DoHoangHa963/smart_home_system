@@ -1,78 +1,203 @@
-import { Device } from '@/types';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import React from 'react';
+import { DeviceStatus, DeviceType } from '@/types/device';
+import { useDeviceStore } from '@/store/deviceStore'; // Import store nếu muốn dùng trực tiếp
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Lightbulb, Fan, Tv, Thermometer, Lock, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Lightbulb, 
+  Fan, 
+  Power, 
+  Settings, 
+  PowerOff,
+  Zap,
+  MoreVertical,
+  Thermometer
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
+// 1. Định nghĩa Interface chuẩn một lần duy nhất
 interface DeviceCardProps {
-  device: Device;
-  onToggle: (id: string) => void;
+  device: {
+    id: string | number; // Chấp nhận cả number và string để linh hoạt
+    name: string;
+    type: DeviceType;
+    status: DeviceStatus;
+    room?: string;
+    deviceCode?: string;
+    stateValue?: string;
+  };
+  // Callback để Component cha (RoomDetail) xử lý logic
+  onControl?: (deviceId: string | number, action: 'TURN_ON' | 'TURN_OFF' | 'TOGGLE') => void;
+  onEdit?: (deviceId: string | number) => void;
+  onDelete?: (deviceId: string | number) => void;
 }
 
-const getDeviceIcon = (type: string) => {
-  switch (type) {
-    case 'light': return <Lightbulb className="h-5 w-5" />;
-    case 'fan': return <Fan className="h-5 w-5" />;
-    case 'tv': return <Tv className="h-5 w-5" />;
-    case 'ac': return <Thermometer className="h-5 w-5" />;
-    case 'lock': return <Lock className="h-5 w-5" />;
-    default: return <Zap className="h-5 w-5" />;
-  }
-};
-
-const getDeviceColor = (type: string, isActive: boolean) => {
-  if (!isActive) return "bg-gray-100 text-gray-400"; // Off state
+const DeviceCard: React.FC<DeviceCardProps> = ({ device, onControl, onEdit, onDelete }) => {
+  // Nếu không truyền onControl từ cha, có thể dùng store trực tiếp (fallback)
+  const { controlDevice } = useDeviceStore(); 
   
-  switch (type) {
-    case 'light': return "bg-yellow-100 text-yellow-600";
-    case 'fan': return "bg-blue-100 text-blue-600";
-    case 'ac': return "bg-cyan-100 text-cyan-600";
-    case 'tv': return "bg-purple-100 text-purple-600";
-    case 'lock': return "bg-red-100 text-red-600";
-    default: return "bg-primary/10 text-primary";
-  }
-};
+  const getDeviceIcon = () => {
+    switch (device.type) {
+      case DeviceType.LIGHT:
+        return <Lightbulb className="h-6 w-6" />;
+      case DeviceType.FAN:
+        return <Fan className="h-6 w-6" />;
+      case DeviceType.SENSOR:
+        return <Thermometer className="h-6 w-6" />;
+      default:
+        return <Power className="h-6 w-6" />;
+    }
+  };
 
-export default function DeviceCard({ device, onToggle }: DeviceCardProps) {
-  const isOn = device.status === 'on';
+  const getStatusColor = () => {
+    switch (device.status) {
+      case DeviceStatus.ON:
+        return 'bg-green-500';
+      case DeviceStatus.OFF:
+        return 'bg-gray-400';
+      case DeviceStatus.ONLINE:
+        return 'bg-blue-500';
+      case DeviceStatus.OFFLINE:
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-400';
+    }
+  };
+
+  // Hàm xử lý chung cho Toggle Switch
+  const handleToggle = async () => {
+    const action = device.status === DeviceStatus.ON ? 'TURN_OFF' : 'TURN_ON';
+    
+    if (onControl) {
+      // Ưu tiên dùng prop từ cha truyền xuống
+      onControl(device.id, action);
+    } else {
+      // Fallback: Gọi trực tiếp store nếu không có onControl
+      try {
+        await controlDevice(Number(device.id), action);
+      } catch (error) {
+        console.error('Failed to toggle device:', error);
+      }
+    }
+  };
+
+  // Hàm xử lý cho Dropdown Menu
+  const handleMoreAction = (action: string) => {
+    switch (action) {
+      case 'edit':
+        onEdit?.(device.id);
+        break;
+      case 'delete':
+        onDelete?.(device.id);
+        break;
+      case 'turn_on':
+        onControl ? onControl(device.id, 'TURN_ON') : controlDevice(Number(device.id), 'TURN_ON');
+        break;
+      case 'turn_off':
+        onControl ? onControl(device.id, 'TURN_OFF') : controlDevice(Number(device.id), 'TURN_OFF');
+        break;
+      case 'toggle':
+        handleToggle();
+        break;
+    }
+  };
 
   return (
-    <Card className={cn(
-      "border transition-all duration-200 hover:shadow-md", // Hiệu ứng hover nhẹ
-      isOn ? "border-primary/50 bg-primary/[0.02]" : "border-border bg-card" // Active state tinh tế
-    )}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        {/* Icon Box */}
-        <div className={cn("p-2.5 rounded-xl transition-colors", getDeviceColor(device.type, isOn))}>
-          {getDeviceIcon(device.type)}
-        </div>
-        
-        {/* Toggle Switch */}
-        <Switch 
-          checked={isOn} 
-          onCheckedChange={() => onToggle(device.id)} 
-          className="data-[state=checked]:bg-primary"
-        />
-      </CardHeader>
-
-      <CardContent className="pt-4">
-        <div className="flex justify-between items-end">
-          <div>
-            <h3 className="font-semibold text-lg leading-none tracking-tight text-foreground">
-              {device.name}
-            </h3>
-            <p className="text-sm text-muted-foreground mt-1.5 font-medium">
-              {device.room}
-            </p>
+    <Card className="hover:shadow-lg transition-shadow duration-300">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`p-2 rounded-lg ${device.status === DeviceStatus.ON ? 'bg-primary/10' : 'bg-muted'}`}>
+              {getDeviceIcon()}
+            </div>
+            <div>
+              <CardTitle className="text-lg font-semibold line-clamp-1">{device.name}</CardTitle>
+              <p className="text-sm text-muted-foreground">{device.room || 'N/A'}</p>
+            </div>
           </div>
-          
-          {/* Status Badge (Chỉ hiện khi bật để đỡ rối mắt, hoặc hiện mờ khi tắt) */}
-          <Badge variant={isOn ? "default" : "outline"} className={cn("font-normal", !isOn && "text-muted-foreground")}>
-            {isOn ? 'On' : 'Off'}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleMoreAction('edit')}>
+                <Settings className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleMoreAction('turn_on')}>
+                <Power className="mr-2 h-4 w-4" />
+                Turn On
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleMoreAction('turn_off')}>
+                <PowerOff className="mr-2 h-4 w-4" />
+                Turn Off
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleMoreAction('delete')}
+                className="text-red-600 focus:text-red-600"
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="pb-4">
+        <div className="flex items-center justify-between mb-3">
+          <Badge 
+            variant={device.status === DeviceStatus.ON ? "default" : "secondary"}
+            className={`${getStatusColor()} text-white`}
+          >
+            {device.status}
+          </Badge>
+          <Badge variant="outline">
+            {device.type}
           </Badge>
         </div>
+        
+        {device.deviceCode && (
+          <p className="text-sm text-muted-foreground truncate">
+            Code: {device.deviceCode}
+          </p>
+        )}
       </CardContent>
+      
+      <CardFooter className="pt-2 border-t">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center space-x-2">
+            <Switch
+              checked={device.status === DeviceStatus.ON}
+              onCheckedChange={handleToggle}
+              disabled={device.status === DeviceStatus.OFFLINE}
+            />
+            <span className="text-sm">
+              {device.status === DeviceStatus.ON ? 'On' : 'Off'}
+            </span>
+          </div>
+          
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleToggle()}
+            disabled={device.status === DeviceStatus.OFFLINE}
+          >
+            <Zap className="h-4 w-4 mr-1" />
+            Toggle
+          </Button>
+        </div>
+      </CardFooter>
     </Card>
   );
-}
+};
+
+export default DeviceCard;

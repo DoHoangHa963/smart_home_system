@@ -25,6 +25,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { HOME_PERMISSIONS, SYSTEM_PERMISSIONS } from '@/types/permission';
+import { useEffect, useMemo } from 'react';
 
 interface NavItem {
   icon: any;
@@ -197,24 +198,37 @@ export default function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
   };
 
   // Lọc sections
-  const visibleSections = allSections
-  .filter(section => {
-    // ADMIN hệ thống → thấy tất cả
-    if (isAdmin) return true;
+  const visibleSections = useMemo(() => {
+      const canUseHomeSidebar = isAdmin || homeRole === 'OWNER';
+      
+      return allSections
+        .filter(section => {
+          // ADMIN hệ thống → thấy tất cả
+          if (isAdmin) return true;
 
-    // Section chỉ dành cho ADMIN
-    if (section.systemOnly) return false;
+          // Section chỉ dành cho ADMIN
+          if (section.systemOnly) return false;
 
-    // Sidebar HOME chỉ cho OWNER
-    if (!canUseHomeSidebar) return false;
+          // Sidebar HOME chỉ cho OWNER
+          if (!canUseHomeSidebar) return false;
 
-    return true;
-  })
-  .map(section => ({
-    ...section,
-    items: filterItems(section.items),
-  }))
-  .filter(section => section.items.length > 0);
+          return true;
+        })
+        .map(section => ({
+          ...section,
+          items: filterItems(section.items),
+        }))
+        .filter(section => section.items.length > 0);
+    }, [isAdmin, homeRole]);
+
+    useEffect(() => {
+    console.log('Sidebar rendering:', {
+      isAdmin,
+      hasHomeAccess,
+      homeRole,
+      sectionsCount: visibleSections.length
+    });
+  }, [isAdmin, hasHomeAccess, homeRole, visibleSections.length]);
 
 
   // ============================================
@@ -244,7 +258,7 @@ export default function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
       </div>
 
       {/* NAVIGATION */}
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4">
         {/* Thông báo nếu user chưa có home */}
         {!hasHomeAccess && !isAdmin && (
           <div className="px-3 py-8 text-center text-sm text-muted-foreground">

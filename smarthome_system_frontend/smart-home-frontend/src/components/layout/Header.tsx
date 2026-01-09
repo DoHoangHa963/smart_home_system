@@ -1,5 +1,5 @@
-// components/layout/Header.tsx - UPDATED
-import { Bell, Search, Menu, Zap, ChevronsUpDown, Check, PlusCircle, LogOut } from 'lucide-react';
+// components/layout/Header.tsx
+import { Bell, Search, Menu, Zap, ChevronsUpDown, Check, PlusCircle, LogOut, Home } from 'lucide-react'; // Đã thêm icon Home
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useTheme } from "@/components/theme-provider";
@@ -8,6 +8,8 @@ import { useAuthStore } from '@/store/authStore';
 import { useHomeStore } from '@/store/homeStore';
 import { usePermission } from '@/hooks/usePermission';
 import { useEffect } from 'react';
+import CreateHomeModal from '@/pages/home/CreateHomeModal';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,11 +51,7 @@ export default function Header() {
   const { isAdmin } = usePermission();
   const [openCombobox, setOpenCombobox] = useState(false);
   const [openTheme, setOpenTheme] = useState(false);
-
-  // Fetch homes on mount
-  useEffect(() => {
-      fetchMyHomes();
-  }, []);
+  const [openMobileHome, setOpenMobileHome] = useState(false); // State mới cho mobile home selector
 
   const handleHomeSelect = async (home: any) => {
     await setCurrentHome(home);
@@ -90,7 +88,7 @@ export default function Header() {
 
       {/* RIGHT ACTIONS */}
       <div className="flex items-center gap-2 ml-auto">
-        {/* HOME SELECTOR - Chỉ hiện cho User, không hiện cho Admin */}
+        {/* HOME SELECTOR - DESKTOP ONLY (hidden sm:flex) */}
           <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
             <PopoverTrigger asChild>
               <Button
@@ -147,7 +145,7 @@ export default function Header() {
           </Badge>
         )}
 
-        {/* Theme Toggle */}
+        {/* Theme Toggle - Desktop */}
         <div className="hidden sm:block">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -165,7 +163,7 @@ export default function Header() {
           </DropdownMenu>
         </div>
 
-        {/* Notifications */}
+        {/* Notifications - Desktop */}
         <div className="hidden sm:block">
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
@@ -199,6 +197,50 @@ export default function Header() {
 
             {/* MOBILE ONLY */}
             <div className="sm:hidden">
+              
+              {/* --- START: MOBILE HOME SELECTOR --- */}
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setOpenMobileHome(prev => !prev);
+                }}
+                className="flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <Home className="h-4 w-4" />
+                  Chọn nhà
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="max-w-[80px] truncate">
+                    {currentHome?.name || "Chưa chọn"}
+                  </span>
+                  <ChevronsUpDown
+                    className={cn("h-4 w-4 transition-transform", openMobileHome && "rotate-180")}
+                  />
+                </div>
+              </DropdownMenuItem>
+
+              {openMobileHome && (
+                <div className="pl-8 space-y-1 my-1">
+                  {homes?.map((home) => (
+                    <DropdownMenuItem 
+                      key={home.id} 
+                      onClick={() => handleHomeSelect(home)} 
+                      className="text-sm cursor-pointer"
+                    >
+                      {home.name}
+                      {currentHome?.id === home.id && <Check className="ml-auto h-4 w-4" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate('/select-home')} className="text-sm cursor-pointer">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Tạo nhà mới
+                  </DropdownMenuItem>
+                </div>
+              )}
+              {/* --- END: MOBILE HOME SELECTOR --- */}
+
               <DropdownMenuItem
                 onSelect={(e) => {
                   e.preventDefault();
