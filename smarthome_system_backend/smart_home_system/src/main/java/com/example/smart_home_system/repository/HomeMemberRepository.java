@@ -63,4 +63,10 @@ public interface HomeMemberRepository extends JpaRepository<HomeMember, Long> {
     // Method cũ - giữ lại cho tương thích
     @Query("SELECT hm FROM HomeMember hm WHERE hm.home.id = :homeId AND hm.deletedAt IS NULL")
     List<HomeMember> findAllByHomeId(@Param("homeId") Long homeId);
+
+    // Kiểm tra xem User có phải là thành viên của nhà này không (bất kể role)
+    boolean existsByUserUsernameAndHomeId(String username, Long homeId);
+
+    // Kiểm tra xem User có phải là thành viên của nhà này với Role cụ thể không (VD: OWNER)
+    boolean existsByUserUsernameAndHomeIdAndRole(String username, Long homeId, HomeMemberRole role);
 }

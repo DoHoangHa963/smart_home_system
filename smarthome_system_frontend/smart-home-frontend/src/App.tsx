@@ -10,6 +10,7 @@ import AuthWatcher from './AuthWatcher';
 import SelectHome from '@/pages/SelectHome';
 import SystemUsers from '@/pages/admin/SystemUsers';
 import SystemHomes from '@/pages/admin/SystemHomes';
+import AdminDashboard from '@/pages/admin/AdminDashboard';
 
 import { Toaster } from "@/components/ui/sonner";
 import Rooms from '@/pages/room/Rooms';
@@ -32,9 +33,11 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="/analytics" element={<AdminDashboard />} />
             <Route path="devices" element={<Device />} />
             <Route path="rooms" element={<Rooms />} />
             <Route path="members" element={<Members />} />
+
             <Route path="/system/users" element={<SystemUsers />} />
             <Route path="/system/homes" element={<SystemHomes />} />
 
