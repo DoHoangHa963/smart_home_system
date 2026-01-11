@@ -70,7 +70,8 @@ export default function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
           icon: BarChart3,
           label: 'Thống kê',
           path: '/analytics',
-          permission: [HOME_PERMISSIONS.HOME_DASHBOARD_VIEW, HOME_PERMISSIONS.HOME_LOGS_VIEW],
+          systemOnly: true,
+          badge: 'Admin',
         },
       ],
     },
@@ -95,23 +96,23 @@ export default function Sidebar({ isMobile = false }: { isMobile?: boolean }) {
     },
 
     // SECTION 3: Tự động hóa (Home users)
-    {
-      title: 'Tự động hóa',
-      items: [
-        {
-          icon: Zap,
-          label: 'Tự động hóa',
-          path: '/automations',
-          permission: HOME_PERMISSIONS.AUTOMATION_VIEW,
-        },
-        {
-          icon: Clapperboard,
-          label: 'Ngữ cảnh',
-          path: '/scenes',
-          permission: HOME_PERMISSIONS.SCENE_VIEW,
-        },
-      ],
-    },
+    // {
+    //   title: 'Tự động hóa',
+    //   items: [
+    //     {
+    //       icon: Zap,
+    //       label: 'Tự động hóa',
+    //       path: '/automations',
+    //       permission: HOME_PERMISSIONS.AUTOMATION_VIEW,
+    //     },
+    //     {
+    //       icon: Clapperboard,
+    //       label: 'Ngữ cảnh',
+    //       path: '/scenes',
+    //       permission: HOME_PERMISSIONS.SCENE_VIEW,
+    //     },
+    //   ],
+    // },
 
     // SECTION 4: Quản lý thành viên & logs (Home users có quyền)
     {

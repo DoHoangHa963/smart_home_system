@@ -35,7 +35,8 @@ export const deviceApi = {
   },
   
   controlDevice: (deviceId: number, action: 'TURN_ON' | 'TURN_OFF' | 'TOGGLE') => {
-    return axiosClient.post(`/devices/${deviceId}/${action.toLowerCase()}`);
+    const endpoint = action.toLowerCase().replace('_', '-');
+    return axiosClient.post(`/devices/${deviceId}/${endpoint}`);
   },
   
   sendCommand: (deviceId: number, command: string, payload?: any) => {

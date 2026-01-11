@@ -50,4 +50,6 @@ public interface UserService {
 
     // Validation
     boolean validateCurrentPassword(String password);
+
+    void changeStatus(String userId, String statusStr);
 }

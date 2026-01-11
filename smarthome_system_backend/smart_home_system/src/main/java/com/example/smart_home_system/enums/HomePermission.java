@@ -1,46 +1,49 @@
 package com.example.smart_home_system.enums;
 
 public enum HomePermission {
-    // Dashboard
-    HOME_DASHBOARD_VIEW,
+    // ========== HOME LEVEL PERMISSIONS ==========
+    HOME_VIEW,              // Xem thông tin nhà
+    HOME_MANAGE,            // Quản lý nhà (chung)
+    HOME_DELETE,            // Xóa nhà
+    HOME_DASHBOARD_VIEW,    // Xem dashboard
 
-    // Device permissions
-    DEVICE_VIEW,
-    DEVICE_CONTROL,
-    DEVICE_CREATE,
-    DEVICE_UPDATE,
-    DEVICE_DELETE,
+    // ========== DEVICE PERMISSIONS ==========
+    DEVICE_VIEW,            // Xem thiết bị
+    DEVICE_CONTROL,         // Điều khiển thiết bị
+    DEVICE_CREATE,          // Tạo thiết bị
+    DEVICE_UPDATE,          // Cập nhật thiết bị
+    DEVICE_DELETE,          // Xóa thiết bị
 
-    // Room permissions
-    ROOM_VIEW,
-    ROOM_CREATE,
-    ROOM_UPDATE,
-    ROOM_DELETE,
+    // ========== ROOM PERMISSIONS ==========
+    ROOM_VIEW,              // Xem phòng
+    ROOM_CREATE,            // Tạo phòng
+    ROOM_UPDATE,            // Cập nhật phòng
+    ROOM_DELETE,            // Xóa phòng
 
-    // Automation permissions
+    // ========== AUTOMATION PERMISSIONS ==========
     AUTOMATION_VIEW,
     AUTOMATION_CREATE,
     AUTOMATION_UPDATE,
     AUTOMATION_DELETE,
     AUTOMATION_EXECUTE,
 
-    // Scene permissions
+    // ========== SCENE PERMISSIONS ==========
     SCENE_VIEW,
     SCENE_CREATE,
     SCENE_UPDATE,
     SCENE_DELETE,
     SCENE_EXECUTE,
 
-    // Member permissions
+    // ========== MEMBER PERMISSIONS ==========
     MEMBER_VIEW,
     MEMBER_INVITE,
     MEMBER_UPDATE,
     MEMBER_REMOVE,
 
-    // Home settings
+    // ========== HOME SETTINGS ==========
     HOME_SETTINGS_VIEW,
     HOME_SETTINGS_UPDATE,
 
-    // Logs
+    // ========== LOGS ==========
     HOME_LOGS_VIEW
 }
