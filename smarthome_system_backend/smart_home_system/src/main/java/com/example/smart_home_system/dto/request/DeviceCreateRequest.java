@@ -25,5 +25,8 @@ public class DeviceCreateRequest {
     @NotNull(message = "ROOMID_REQUIRED")
     private Long roomId;
 
+    @NotNull(message = "HOMEID_REQUIRED")
+    private Long homeId;
+
     private String metadata;
 }

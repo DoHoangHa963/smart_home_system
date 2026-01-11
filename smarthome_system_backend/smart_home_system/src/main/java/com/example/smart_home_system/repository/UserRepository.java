@@ -1,5 +1,6 @@
 package com.example.smart_home_system.repository;
 
+import com.example.smart_home_system.dto.response.UserResponse;
 import com.example.smart_home_system.entity.User;
 import com.example.smart_home_system.enums.UserStatus;
 import org.springframework.data.domain.Page;
@@ -9,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -55,4 +57,8 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByRoles_Id(Long id);
 
     List<User> findByHomeMemberships_Home_Id(Long homeId);
+
+    long countByCreatedAtAfter(LocalDateTime timestamp);
+
+    long countByStatus(UserStatus status);
 }

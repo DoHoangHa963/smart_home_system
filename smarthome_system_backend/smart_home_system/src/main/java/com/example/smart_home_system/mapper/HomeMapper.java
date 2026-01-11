@@ -33,22 +33,26 @@ public abstract class HomeMapper {
             long activeMemberCount = home.getMembers().stream()
                     .filter(member -> member != null && member.getDeletedAt() == null)
                     .count();
-            response.setMemberCount((int) activeMemberCount);
-        } else {
-            response.setMemberCount(0);
-        }
 
-        response.setRoomCount(home.getRooms() != null ? home.getRooms().size() : 0);
-
-        if (home.getMembers() != null) {
             List<HomeMemberResponse> members = home.getMembers().stream()
                     .filter(member -> member != null && member.getDeletedAt() == null)
                     .map(homeMemberMapper::toResponse)
                     .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
+                    .toList();
+
             response.setMembers(members);
         } else {
+            response.setMemberCount(0);
             response.setMembers(Collections.emptyList());
+        }
+
+        if (home.getRooms() != null) {
+            long activeRoomCount = home.getRooms().stream()
+                    .filter(room -> room != null && room.getDeletedAt() == null)
+                    .count();
+            response.setRoomCount((int) activeRoomCount);
+        } else {
+            response.setRoomCount(0);
         }
     }
 

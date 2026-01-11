@@ -56,6 +56,7 @@ public enum ErrorCode {
     HOME_NOT_FOUND(4020, "Home not found", HttpStatus.NOT_FOUND),
     ROOM_NOT_FOUND(4021, "Room not found", HttpStatus.NOT_FOUND),
     HOME_MEMBER_NOT_FOUND(4022, "Home member not found", HttpStatus.NOT_FOUND),
+    HOME_LIMIT_REACHED(1010, "Bạn đã đạt giới hạn số lượng nhà cho phép (Tối đa 3 nhà)", HttpStatus.BAD_REQUEST),
 
     // Scene not found
     SCENE_NOT_FOUND(4030, "Scene not found", HttpStatus.NOT_FOUND),

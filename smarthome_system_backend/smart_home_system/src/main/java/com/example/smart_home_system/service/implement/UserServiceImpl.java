@@ -2,7 +2,6 @@ package com.example.smart_home_system.service.implement;
 
 import com.example.smart_home_system.dto.request.ChangePasswordRequest;
 import com.example.smart_home_system.dto.request.UserCreationRequest;
-import com.example.smart_home_system.dto.request.UserSearchRequest;
 import com.example.smart_home_system.dto.request.UserUpdateRequest;
 import com.example.smart_home_system.dto.response.UserResponse;
 import com.example.smart_home_system.entity.Permission;
@@ -21,9 +20,7 @@ import com.example.smart_home_system.validation.UsernameValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -376,6 +373,24 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         return passwordEncoder.matches(password, user.getPassword());
+    }
+
+    @Override
+    public void changeStatus(String userId, String statusStr) {
+        // 1. Tìm User
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        // 2. Validate và Convert Status String sang Enum
+        try {
+            UserStatus newStatus = UserStatus.valueOf(statusStr.toUpperCase());
+            user.setStatus(newStatus);
+        } catch (IllegalArgumentException e) {
+            throw new AppException(ErrorCode.INVALID_ENUM_VALUE); // Hoặc tạo lỗi INVALID_STATUS
+        }
+
+        // 3. Lưu lại
+        userRepository.save(user);
     }
 
     // ============ HELPER METHODS ============

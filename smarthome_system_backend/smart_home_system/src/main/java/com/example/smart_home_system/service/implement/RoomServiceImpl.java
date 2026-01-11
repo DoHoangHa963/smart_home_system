@@ -15,6 +15,8 @@ import com.example.smart_home_system.repository.RoomRepository;
 import com.example.smart_home_system.service.RoomService;
 import com.example.smart_home_system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +42,7 @@ public class RoomServiceImpl implements RoomService {
         Home home = homeRepository.findById(request.getHomeId())
                 .orElseThrow(() -> new AppException(ErrorCode.HOME_NOT_FOUND));
 
-        // 2. Check Permission (Only Owner or Manager/Admin can create room)
+        // 2. Check Permission (Only Owner or Admin can create room)
         validateWritePermission(request.getHomeId(), currentUserId);
 
         // 3. Check duplicate room name
@@ -100,11 +102,12 @@ public class RoomServiceImpl implements RoomService {
                 .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
 
         // Check read permission (Any member can view)
-        if (homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId).isEmpty()) {
-            throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
-        }
+        validateReadPermission(room.getHome().getId(), currentUserId);
 
-        return roomMapper.toResponse(room);
+        RoomResponse response = roomMapper.toResponse(room);
+        response.setDeviceCount(room.getDevices().size());
+
+        return response;
     }
 
     @Override
@@ -113,54 +116,167 @@ public class RoomServiceImpl implements RoomService {
         String currentUserId = SecurityUtils.getCurrentUserId();
 
         // Check read permission
-        if (homeMemberRepository.findByHomeIdAndUserId(homeId, currentUserId).isEmpty()) {
-            throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
-        }
+        validateReadPermission(homeId, currentUserId);
 
         return roomRepository.findByHomeId(homeId).stream()
-                .map(roomMapper::toResponse)
+                .map(room -> {
+                    RoomResponse response = roomMapper.toResponse(room);
+                    response.setDeviceCount(room.getDevices().size());
+                    return response;
+                })
                 .collect(Collectors.toList());
     }
 
     @Override
-    public boolean hasRoomAccess(Long roomId) {
+    @Transactional(readOnly = true)
+    public Page<RoomResponse> getRoomsByHomeId(Long homeId, Pageable pageable) {
         String currentUserId = SecurityUtils.getCurrentUserId();
-        Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
 
-        return homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId).isPresent();
+        // Check read permission
+        validateReadPermission(homeId, currentUserId);
+
+        return roomRepository.findByHomeId(homeId, pageable)
+                .map(room -> {
+                    RoomResponse response = roomMapper.toResponse(room);
+                    response.setDeviceCount(room.getDevices().size());
+                    return response;
+                });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<RoomResponse> searchRooms(Long homeId, String name, Pageable pageable) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+
+        // Check read permission
+        validateReadPermission(homeId, currentUserId);
+
+        Page<Room> roomsPage;
+        if (name == null || name.trim().isEmpty()) {
+            roomsPage = roomRepository.findByHomeId(homeId, pageable);
+        } else {
+            roomsPage = roomRepository.findByHomeIdAndNameContainingIgnoreCase(homeId, name.trim(), pageable);
+        }
+
+        return roomsPage.map(room -> {
+            RoomResponse response = roomMapper.toResponse(room);
+            response.setDeviceCount(room.getDevices().size());
+            return response;
+        });
+    }
+
+    @Override
+    public boolean hasRoomAccess(Long roomId) {
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            Room room = roomRepository.findById(roomId)
+                    .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+
+            return homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId)
+                    .isPresent();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override
     public boolean hasRoomWritePermission(Long roomId) {
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            Room room = roomRepository.findById(roomId)
+                    .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
 
-        HomeMember member = homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId)
-                .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
+            HomeMember member = homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId)
+                    .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
 
-        return member.getRole() == HomeMemberRole.OWNER || member.getRole() == HomeMemberRole.ADMIN;
+            return member.getRole() == HomeMemberRole.OWNER || member.getRole() == HomeMemberRole.ADMIN;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean hasRoomPermission(Long roomId, String permission) {
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            Room room = roomRepository.findById(roomId)
+                    .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+
+            HomeMember member = homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId)
+                    .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
+
+            return member.hasPermission(permission);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean isHomeAdmin(Long homeId) {
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            HomeMember member = homeMemberRepository.findByHomeIdAndUserId(homeId, currentUserId)
+                    .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
+
+            return member.getRole() == HomeMemberRole.OWNER || member.getRole() == HomeMemberRole.ADMIN;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean isHomeOwner(Long homeId) {
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            HomeMember member = homeMemberRepository.findByHomeIdAndUserId(homeId, currentUserId)
+                    .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
+
+            return member.getRole() == HomeMemberRole.OWNER;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override
     public void moveDeviceToRoom(Long roomId, Long deviceId) {
-
+        // Implementation for moving device to room
+        // This would involve DeviceService and DeviceRepository
+        throw new UnsupportedOperationException("Method not implemented");
     }
 
     @Override
     public RoomResponse getRoomWithStatistics(Long roomId) {
-        return null;
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+
+        // Check read permission
+        validateReadPermission(room.getHome().getId(), currentUserId);
+
+        RoomResponse response = roomMapper.toResponse(room);
+        response.setDeviceCount(room.getDevices().size());
+
+        // Additional statistics can be added here
+        // Example: device count by type, etc.
+
+        return response;
     }
 
-    // Helper method to check write permission
+    // Helper method to check write permission (OWNER or ADMIN only)
     private void validateWritePermission(Long homeId, String userId) {
         HomeMember member = homeMemberRepository.findByHomeIdAndUserId(homeId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
 
-        // Chỉ cho phép OWNER hoặc ADMIN tạo/sửa phòng
+        // Only OWNER or ADMIN can create/modify rooms
         if (member.getRole() != HomeMemberRole.OWNER && member.getRole() != HomeMemberRole.ADMIN) {
             throw new AppException(ErrorCode.INSUFFICIENT_PERMISSIONS);
+        }
+    }
+
+    // Helper method to check read permission (any member can view)
+    private void validateReadPermission(Long homeId, String userId) {
+        if (homeMemberRepository.findByHomeIdAndUserId(homeId, userId).isEmpty()) {
+            throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
         }
     }
 }

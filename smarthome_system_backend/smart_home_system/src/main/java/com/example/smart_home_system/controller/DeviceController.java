@@ -18,10 +18,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.stereotype.Controller;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -60,13 +63,11 @@ public class DeviceController {
                     description = "Room not found"
             )
     })
-    @PostMapping(RequestApi.DEVICE_CREATE)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#request.roomId, 'ROOM', 'WRITE')")
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#request.homeId)")
     public ResponseEntity<ApiResponse<DeviceResponse>> createDevice(
             @Valid @RequestBody DeviceCreateRequest request) {
-        DeviceResponse deviceResponse = deviceService.createDevice(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Device has been created", deviceResponse));
+        return ResponseEntity.ok(ApiResponse.success("Device created successfully", deviceService.createDevice(request)));
     }
 
     @Operation(
@@ -84,12 +85,9 @@ public class DeviceController {
             )
     })
     @GetMapping(RequestApi.DEVICE_GET_BY_ID)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'READ')")
-    public ResponseEntity<ApiResponse<DeviceResponse>> getDeviceById(
-            @Parameter(description = "Device ID", required = true, example = "1")
-            @PathVariable Long deviceId) {
-        DeviceResponse response = deviceService.getDeviceById(deviceId);
-        return ResponseEntity.ok(ApiResponse.success("Device retrieved successfully", response));
+    @PreAuthorize("hasRole('ADMIN') or @deviceService.isDeviceMember(#deviceId)")
+    public ResponseEntity<ApiResponse<DeviceResponse>> getDeviceById(@PathVariable Long deviceId) {
+        return ResponseEntity.ok(ApiResponse.success("Device retrieved", deviceService.getDeviceById(deviceId)));
     }
 
     @Operation(
@@ -107,7 +105,7 @@ public class DeviceController {
             )
     })
     @GetMapping(RequestApi.DEVICE_GET_BY_CODE)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceCode, 'DEVICE', 'READ')")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
     public ResponseEntity<ApiResponse<DeviceResponse>> getDeviceByCode(
             @Parameter(description = "Device unique code", required = true, example = "LIGHT_001")
             @PathVariable @NotBlank String deviceCode) {
@@ -125,9 +123,19 @@ public class DeviceController {
             )
     })
     @GetMapping(RequestApi.DEVICE_LIST)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER')")
-    public ResponseEntity<ApiResponse<List<DeviceListResponse>>> getAllDevices() {
-        List<DeviceListResponse> devices = deviceService.getAllDevices();
+    @PreAuthorize("hasAnyRole('ADMIN', 'USER') or @homeService.isHomeMember(#homeId)")
+    public ResponseEntity<ApiResponse<Page<DeviceListResponse>>> getAllDevices(
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size", example = "10")
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort by field", example = "createdAt")
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction (ASC/DESC)", example = "DESC")
+            @RequestParam(defaultValue = "DESC") String sortDirection) {
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<DeviceListResponse> devices = deviceService.getAllDevices(pageable);
         return ResponseEntity.ok(ApiResponse.success("Devices retrieved successfully", devices));
     }
 
@@ -146,12 +154,21 @@ public class DeviceController {
             )
     })
     @GetMapping(RequestApi.DEVICE_LIST_BY_ROOM)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#roomId, 'ROOM', 'READ')")
-    public ResponseEntity<ApiResponse<List<DeviceListResponse>>> getDevicesByRoom(
+    @PreAuthorize("hasRole('ADMIN') or @houseSecurity.isMemberByRoomId(#roomId, authentication)")
+    public ResponseEntity<ApiResponse<Page<DeviceListResponse>>> getDevicesByRoom(
             @Parameter(description = "Room ID", required = true, example = "1")
-            @PathVariable @NotBlank Long roomId) {
-
-        List<DeviceListResponse> devices = deviceService.getDevicesByRoom(roomId);
+            @PathVariable Long roomId,
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size", example = "10")
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort by field", example = "createdAt")
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction (ASC/DESC)", example = "DESC")
+            @RequestParam(defaultValue = "DESC") String sortDirection) {
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<DeviceListResponse> devices = deviceService.getDevicesByRoom(roomId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Devices retrieved successfully", devices));
     }
 
@@ -169,13 +186,19 @@ public class DeviceController {
                     description = "Home not found"
             )
     })
+
     @GetMapping(RequestApi.DEVICE_LIST_BY_HOME)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#homeId, 'HOME', 'READ')")
-    public ResponseEntity<ApiResponse<List<DeviceListResponse>>> getDevicesByHome(
-            @Parameter(description = "Home ID", required = true, example = "1")
-            @PathVariable @NotBlank Long homeId) {
-        List<DeviceListResponse> devices = deviceService.getDevicesByHome(homeId);
-        return ResponseEntity.ok(ApiResponse.success("Devices retrieved successfully", devices));
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
+    public ResponseEntity<ApiResponse<Page<DeviceListResponse>>> getDevicesByHome(
+            @PathVariable Long homeId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDirection) {
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+        return ResponseEntity.ok(ApiResponse.success("Devices retrieved", deviceService.getDevicesByHome(homeId, pageable)));
     }
 
     @Operation(
@@ -197,13 +220,11 @@ public class DeviceController {
             )
     })
     @PutMapping(RequestApi.DEVICE_UPDATE)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'WRITE')")
+    @PreAuthorize("hasRole('ADMIN') or @deviceService.isDeviceOwner(#deviceId)")
     public ResponseEntity<ApiResponse<DeviceResponse>> updateDevice(
-            @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId,
             @Valid @RequestBody DeviceUpdateRequest request) {
-        DeviceResponse response = deviceService.updateDevice(deviceId, request);
-        return ResponseEntity.ok(ApiResponse.success("Device updated successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Device updated", deviceService.updateDevice(deviceId, request)));
     }
 
     @Operation(
@@ -221,12 +242,10 @@ public class DeviceController {
             )
     })
     @DeleteMapping(RequestApi.DEVICE_DELETE)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'DELETE')")
-    public ResponseEntity<ApiResponse<Void>> deleteDevice(
-            @Parameter(description = "Device ID", required = true, example = "1")
-            @PathVariable Long deviceId) {
+    @PreAuthorize("hasRole('ADMIN') or @deviceService.isDeviceOwner(#deviceId)")
+    public ResponseEntity<ApiResponse<Void>> deleteDevice(@PathVariable Long deviceId) {
         deviceService.deleteDevice(deviceId);
-        return ResponseEntity.ok(ApiResponse.success("Device deleted successfully", null));
+        return ResponseEntity.ok(ApiResponse.success("Device deleted", null));
     }
 
     @Operation(
@@ -244,7 +263,7 @@ public class DeviceController {
             )
     })
     @PatchMapping(RequestApi.DEVICE_UPDATE_STATUS)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'WRITE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_WRITE')")
     public ResponseEntity<ApiResponse<DeviceResponse>> updateDeviceStatus(
             @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId,
@@ -273,7 +292,7 @@ public class DeviceController {
             )
     })
     @PostMapping("/{deviceId}/command")
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'CONTROL')")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
     public ResponseEntity<ApiResponse<Void>> sendCommand(
             @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId,
@@ -281,10 +300,7 @@ public class DeviceController {
             @RequestParam @NotBlank String command,
             @RequestBody(required = false) Map<String, Object> payload) {
         log.info("Sending command to device {}: {}", deviceId, command);
-
-        // Get device code first
         DeviceResponse device = deviceService.getDeviceById(deviceId);
-
         deviceService.sendCommandToDevice(device.getDeviceCode(), command, payload);
         return ResponseEntity.ok(ApiResponse.success("Command sent to device", null));
     }
@@ -304,7 +320,7 @@ public class DeviceController {
             )
     })
     @PostMapping(RequestApi.DEVICE_TURN_ON)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'CONTROL')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_CONTROL')")
     public ResponseEntity<ApiResponse<Void>> turnOnDevice(
             @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId) {
@@ -329,7 +345,7 @@ public class DeviceController {
             )
     })
     @PostMapping(RequestApi.DEVICE_TURN_OFF)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'CONTROL')")
+    @PreAuthorize(value = "hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_CONTROL')")
     public ResponseEntity<ApiResponse<Void>> turnOffDevice(
             @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId) {
@@ -339,30 +355,25 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success("Device turned off", null));
     }
 
-    @Operation(
-            summary = "Toggle device state",
-            description = "Toggle the on/off state of a device"
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "Device toggled successfully"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "404",
-                    description = "Device not found"
-            )
-    })
-    @PostMapping(RequestApi.DEVICE_TOGGLE)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'CONTROL')")
-    public ResponseEntity<ApiResponse<Void>> toggleDevice(
-            @Parameter(description = "Device ID", required = true, example = "1")
-            @PathVariable Long deviceId) {
-        log.info("Toggling device: {}", deviceId);
-        DeviceResponse device = deviceService.getDeviceById(deviceId);
-        deviceService.sendCommandToDevice(device.getDeviceCode(), "TOGGLE", null);
-        return ResponseEntity.ok(ApiResponse.success("Device toggled", null));
-    }
+//    @Operation(
+//            summary = "Toggle device state",
+//            description = "Toggle the on/off state of a device"
+//    )
+//    @ApiResponses({
+//            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+//                    responseCode = "200",
+//                    description = "Device toggled successfully"
+//            ),
+//            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+//                    responseCode = "404",
+//                    description = "Device not found"
+//            )
+//    })
+//    @PostMapping(RequestApi.DEVICE_TOGGLE)
+//    @PreAuthorize("hasRole('ADMIN') or @deviceService.isDeviceMember(#deviceId) or hasPermission(#deviceId, 'DEVICE', 'CONTROL')")
+//    public ResponseEntity<ApiResponse<DeviceResponse>> toggleDevice(@PathVariable Long deviceId) {
+//        return ResponseEntity.ok(ApiResponse.success("Device status toggled", deviceService.toggleDevice(deviceId)));
+//    }
 
     @Operation(
             summary = "Get devices by status",
@@ -376,11 +387,21 @@ public class DeviceController {
     })
     @GetMapping("/status/{status}")
     @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER')")
-    public ResponseEntity<ApiResponse<List<DeviceListResponse>>> getDevicesByStatus(
+    public ResponseEntity<ApiResponse<Page<DeviceListResponse>>> getDevicesByStatus(
             @Parameter(description = "Device status", required = true, example = "ONLINE")
-            @PathVariable DeviceStatus status) {
+            @PathVariable DeviceStatus status,
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size", example = "10")
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort by field", example = "createdAt")
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction (ASC/DESC)", example = "DESC")
+            @RequestParam(defaultValue = "DESC") String sortDirection) {
         log.debug("Fetching devices with status: {}", status);
-        List<DeviceListResponse> devices = deviceService.getDevicesByStatus(status);
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<DeviceListResponse> devices = deviceService.getDevicesByStatus(status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Devices retrieved successfully", devices));
     }
 
@@ -404,7 +425,8 @@ public class DeviceController {
             @Parameter(description = "Room ID", example = "1")
             @RequestParam(required = false) Long roomId) {
         log.debug("Searching devices with query: {}, type: {}, room: {}", query, deviceType, roomId);
-        return ResponseEntity.ok(ApiResponse.success("Search functionality will be implemented", null));
+        List<DeviceListResponse> devices = deviceService.searchDevices(query, deviceType, roomId);
+        return ResponseEntity.ok(ApiResponse.success("Devices retrieved successfully", devices));
     }
 
     @Operation(
@@ -427,8 +449,7 @@ public class DeviceController {
             @PathVariable String deviceCode,
             @RequestBody Map<String, Object> state) {
         log.info("Updating state for device {}: {}", deviceCode, state);
-        String stateJson = convertMapToJson(state);
-        deviceService.updateDeviceState(deviceCode, stateJson);
+        deviceService.updateDeviceState(deviceCode, state);
         return ResponseEntity.ok(ApiResponse.success("Device state updated", null));
     }
 
@@ -447,15 +468,12 @@ public class DeviceController {
             )
     })
     @GetMapping(RequestApi.DEVICE_STATISTICS)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_VIEW')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getDeviceStatistics(
             @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId) {
         log.debug("Fetching statistics for device: {}", deviceId);
-        Map<String, Object> stats = Map.of(
-                "deviceId", deviceId,
-                "message", "Statistics functionality will be implemented"
-        );
+        Map<String, Object> stats = deviceService.getDeviceStatistics(deviceId);
         return ResponseEntity.ok(ApiResponse.success("Statistics retrieved", stats));
     }
 
