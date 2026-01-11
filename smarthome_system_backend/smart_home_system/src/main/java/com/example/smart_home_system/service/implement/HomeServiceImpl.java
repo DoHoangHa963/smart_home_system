@@ -38,6 +38,7 @@ public class HomeServiceImpl implements HomeService {
     private final UserRepository userRepository;
     private final HomeMapper homeMapper;
     private final HomeMemberService homeMemberService;
+    private final int MAX_HOMES_PER_USER = 3;
 
     @Override
     @Transactional
@@ -45,6 +46,12 @@ public class HomeServiceImpl implements HomeService {
         String currentUserId = SecurityUtils.getCurrentUserId();
         User currentUser = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        long currentHomes = homeRepository.countByOwnerId(currentUserId);
+        if (currentHomes >= MAX_HOMES_PER_USER) {
+            log.warn("User {} tried to create home but reached limit of {}", currentUserId, MAX_HOMES_PER_USER);
+            throw new AppException(ErrorCode.HOME_LIMIT_REACHED);
+        }
 
         // 1. Check duplicate name for owner
         if (homeRepository.existsByNameAndOwnerId(request.getName(), currentUserId)) {
@@ -107,14 +114,11 @@ public class HomeServiceImpl implements HomeService {
     public HomeResponse getHomeById(Long homeId) {
         String currentUserId = SecurityUtils.getCurrentUserId();
 
-        // Kiểm tra user có phải là thành viên của home không
         HomeMember member = homeMemberRepository.findByHomeIdAndUserId(homeId, currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
 
-        // Lấy home
         Home home = member.getHome();
 
-        // Return basic response (không có members để tránh N+1 query)
         return homeMapper.toBasicResponse(home);
     }
 
@@ -124,8 +128,7 @@ public class HomeServiceImpl implements HomeService {
         String currentUserId = SecurityUtils.getCurrentUserId();
         Page<Home> homesPage  = homeRepository.findByUserIdWithOwner(currentUserId, pageable);
 
-        // Sử dụng basic response để tránh N+1 query
-        return homesPage.map(homeMapper::toBasicResponse);
+        return homesPage.map(homeMapper::toResponse);
     }
 
     @Override

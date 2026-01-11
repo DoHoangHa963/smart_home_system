@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDeviceStore } from '@/store/deviceStore';
+import { useRoomsByHome } from '@/hooks/useRoom'; // [CHANGE] Import hook
 import { DeviceType } from '@/types/device';
 import {
   Dialog,
@@ -28,11 +29,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { PlusCircle, Loader2 } from 'lucide-react'; // Thêm icon Loader2
+import { PlusCircle, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { toast } from 'sonner'; // Sửa import toast nếu bạn dùng sonner hoặc component ui/toast
 
 const formSchema = z.object({
   name: z.string().min(2, 'Tên thiết bị phải có ít nhất 2 ký tự'),
@@ -43,15 +43,15 @@ const formSchema = z.object({
 });
 
 interface AddDeviceDialogProps {
-  rooms?: Array<{ id: number; name: string }>; // Làm optional vì có thể không cần list nếu đã fix room
+  rooms?: Array<{ id: number; name: string }>; 
   homeId: number;
-  fixedRoomId?: number;     // ID phòng cố định (nếu gọi từ trang chi tiết)
-  fixedRoomName?: string;   // Tên phòng cố định
-  trigger?: React.ReactNode; // Cho phép custom nút bấm mở dialog
+  fixedRoomId?: number;     
+  fixedRoomName?: string;   
+  trigger?: React.ReactNode; 
 }
 
 const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({ 
-  rooms = [], 
+  rooms: propRooms = [], // [CHANGE] Đổi tên prop để tránh trùng, dùng làm fallback
   homeId, 
   fixedRoomId, 
   fixedRoomName,
@@ -59,6 +59,14 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const { createDevice, isLoading } = useDeviceStore();
+
+  // [CHANGE] Fetch danh sách phòng trực tiếp từ API
+  const { data: fetchedRooms, isLoading: isLoadingRooms } = useRoomsByHome(homeId, {
+    enabled: open && !fixedRoomId, // Chỉ fetch khi dialog mở và không bị fix phòng
+  });
+
+  // [CHANGE] Ưu tiên dữ liệu từ hook, nếu không có thì dùng props
+  const roomsToDisplay = fetchedRooms && fetchedRooms.length > 0 ? fetchedRooms : propRooms;
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -66,12 +74,11 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
       name: '',
       deviceCode: '',
       deviceType: DeviceType.LIGHT,
-      roomId: fixedRoomId ? fixedRoomId.toString() : '', // Điền sẵn ID nếu có
+      roomId: fixedRoomId ? fixedRoomId.toString() : '',
       metadata: '',
     },
   });
 
-  // Reset form khi đóng mở hoặc đổi fixedRoomId
   useEffect(() => {
     if (open) {
       form.reset({
@@ -91,11 +98,8 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
         roomId: parseInt(values.roomId),
         homeId,
       });
-      
-      // Không cần gọi toast ở đây vì store đã gọi rồi (dựa trên code store bạn gửi)
       setOpen(false);
     } catch (error: any) {
-      // Store cũng đã handle error toast, nhưng để chắc chắn:
       console.error(error);
     }
   };
@@ -184,7 +188,6 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Phòng *</FormLabel>
-                      {/* LOGIC MỚI: Nếu có fixedRoomId -> Hiển thị Input readonly, ngược lại hiển thị Select */}
                       {fixedRoomId ? (
                          <FormControl>
                             <Input value={fixedRoomName} disabled className="bg-muted" />
@@ -193,11 +196,12 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Chọn phòng" />
+                                <SelectValue placeholder={isLoadingRooms ? "Đang tải phòng..." : "Chọn phòng"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {rooms.map((room) => (
+                              {/* [CHANGE] Sử dụng roomsToDisplay thay vì rooms prop cũ */}
+                              {roomsToDisplay.map((room) => (
                                 <SelectItem key={room.id} value={room.id.toString()}>
                                   {room.name}
                                 </SelectItem>

@@ -3,6 +3,8 @@ import type { ApiResponse } from '@/types/api';
 import api from '../api';
 import type { User } from '@/types/user';
 import type { PageableResponse } from '@/types/pageable';
+import type { AdminDashboardResponse } from '@/types/admin';
+import type { PaginatedResponse, DeviceResponse } from '@/types/device';
 
 export const adminApi = {
   /**
@@ -202,5 +204,32 @@ return api.put<ApiResponse<User>>(`/users/${userId}`, data);
     roleIds?: number[];
   }) => {
     return api.post<ApiResponse<User>>('/users', userData);
+  },
+
+  /**
+   * GET /api/v1/admin/dashboard/detail
+   * Lấy toàn bộ dữ liệu thống kê cho Dashboard (Charts, Cards, Logs)
+   */
+  getDashboardDetail: async () => {
+    // Lưu ý: Path phải khớp với @RequestMapping("/api/v1/admin") bên Backend
+    return api.get<AdminDashboardResponse>('/admin/dashboard/detail');
+  },
+
+  /**
+   * GET /api/v1/admin/devices
+   * Lấy danh sách TOÀN BỘ thiết bị trong hệ thống (Global View)
+   * Khác với lấy thiết bị theo Home, API này dành cho Admin quản lý
+   */
+  getAllDevicesGlobal: async (
+    page = 0, 
+    size = 20
+  ) => {
+    return api.get<ApiResponse<PaginatedResponse<DeviceResponse>>>('/admin/devices', {
+      params: { 
+        page, 
+        size 
+      }
+    });
   }
+
 };
