@@ -44,7 +44,14 @@ file:
   max-size: 5MB
   allowed-extensions: jpg,jpeg,png,gif
 
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id: smarthome-test-client
+  username: mqtt_user  # Nếu có auth
+  password: mqtt_pass
+  default-topic: smarthome/1/ESP32-LIVINGROOM-LIGHT
+
 jwt:
-  expiration: 86400 #in seconds
-  refreshable-duration: 360000 # in seconds
+  expiration: 36000 #in seconds
+  refreshable-duration: 100000 # in seconds
   secret: "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"

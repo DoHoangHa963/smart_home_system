@@ -8,9 +8,7 @@ import com.example.smart_home_system.entity.Permission;
 import com.example.smart_home_system.entity.Role;
 import com.example.smart_home_system.entity.User;
 import com.example.smart_home_system.enums.UserStatus;
-import com.example.smart_home_system.exception.AppException;
-import com.example.smart_home_system.exception.ErrorCode;
-import com.example.smart_home_system.exception.GlobalExceptionHandler;
+import com.example.smart_home_system.exception.*;
 import com.example.smart_home_system.mapper.UserMapper;
 import com.example.smart_home_system.repository.RoleRepository;
 import com.example.smart_home_system.repository.UserRepository;
@@ -70,7 +68,7 @@ public class UserServiceImpl implements UserService {
         log.debug("Fetching user by ID: {}", id);
 
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
 
         return userMapper.toUserResponse(user);
     }
@@ -81,10 +79,10 @@ public class UserServiceImpl implements UserService {
         log.debug("Fetching user by email: {}", email);
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
 
         if (user.getDeletedAt() != null) {
-            throw new GlobalExceptionHandler.ResourceNotFoundException("User has been deleted");
+            throw new ResourceNotFoundException("User has been deleted");
         }
 
         return userMapper.toUserResponse(user);
@@ -96,10 +94,10 @@ public class UserServiceImpl implements UserService {
         log.debug("Fetching user by username: {}", username);
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with username: " + username));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
 
         if (user.getDeletedAt() != null) {
-            throw new GlobalExceptionHandler.ResourceNotFoundException("User has been deleted");
+            throw new ResourceNotFoundException("User has been deleted");
         }
 
         return userMapper.toUserResponse(user);
@@ -184,7 +182,7 @@ public class UserServiceImpl implements UserService {
         log.info("Updating user with ID: {}", id);
 
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
 
         validateUserUpdate(request, user);
 
@@ -218,7 +216,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserResponse updateUserStatus(String id, String status) {
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
 
         UserStatus userStatus = parseUserStatus(status);
         validateStatusChange(user, userStatus);
@@ -234,14 +232,14 @@ public class UserServiceImpl implements UserService {
         String currentId = SecurityUtils.getCurrentUserId();
 
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            throw new GlobalExceptionHandler.BadRequestException("Passwords do not match");
+            throw new BadRequestException("Passwords do not match");
         }
 
         User user = userRepository.findByIdAndDeletedAtIsNull(currentId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + currentId));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + currentId));
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
-            throw new GlobalExceptionHandler.BadRequestException("Passwords do not match");
+            throw new BadRequestException("Passwords do not match");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
@@ -256,7 +254,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserResponse updateAvatar(String id, String avatarUrl) {
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
 
         user.setAvatarUrl(avatarUrl);
         User updateUser = userRepository.save(user);
@@ -266,7 +264,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void deleteUser(String id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
         validateUserDeletion(user);
         userRepository.delete(user);
     }
@@ -274,7 +272,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void softDeleteUser(String id) {
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
         validateUserDeletion(user);
 
         user.softDelete();
@@ -305,7 +303,7 @@ public class UserServiceImpl implements UserService {
         log.info("Assigning roles {} to user {}", roleIds, userId);
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
 
         Set<Role> roles = new HashSet<>(roleRepository.findAllById(roleIds));
 
@@ -322,7 +320,7 @@ public class UserServiceImpl implements UserService {
         log.info("Removing roles {} from user {}", roleIds, userId);
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found with ID: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
 
         Set<Role> rolesToRemove = new HashSet<>(roleRepository.findAllById(roleIds));
 
@@ -399,20 +397,20 @@ public class UserServiceImpl implements UserService {
         // Validate username format
         String validationMessage = UsernameValidator.getValidationMessage(request.getUsername());
         if (validationMessage != null) {
-            throw new GlobalExceptionHandler.BadRequestException("Invalid username: " + validationMessage);
+            throw new BadRequestException("Invalid username: " + validationMessage);
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new GlobalExceptionHandler.DuplicateResourceException("Email already registered");
+            throw new DuplicateResourceException("Email already registered");
         }
 
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new GlobalExceptionHandler.DuplicateResourceException("Username already taken");
+            throw new DuplicateResourceException("Username already taken");
         }
 
         if (request.getPhone() != null && !request.getPhone().isEmpty() &&
                 userRepository.existsByPhone(request.getPhone())) {
-            throw new GlobalExceptionHandler.DuplicateResourceException("Phone number already registered");
+            throw new DuplicateResourceException("Phone number already registered");
         }
     }
 
@@ -420,14 +418,14 @@ public class UserServiceImpl implements UserService {
         // Check if new email already exists (if being changed)
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             if (userRepository.existsByEmail(request.getEmail())) {
-                throw new GlobalExceptionHandler.DuplicateResourceException("Email already registered");
+                throw new DuplicateResourceException("Email already registered");
             }
         }
 
         // Check if new phone already exists (if being changed)
         if (request.getPhone() != null && !request.getPhone().equals(user.getPhone())) {
             if (userRepository.existsByPhone(request.getPhone())) {
-                throw new GlobalExceptionHandler.DuplicateResourceException("Phone number already registered");
+                throw new DuplicateResourceException("Phone number already registered");
             }
         }
     }
@@ -437,7 +435,7 @@ public class UserServiceImpl implements UserService {
 
         // Prevent users from banning themselves
         if (newStatus == UserStatus.BANNED && user.getId().equals(currentUserId)) {
-            throw new GlobalExceptionHandler.BadRequestException("Cannot ban yourself");
+            throw new BadRequestException("Cannot ban yourself");
         }
     }
 
@@ -445,7 +443,7 @@ public class UserServiceImpl implements UserService {
         try {
             return UserStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new GlobalExceptionHandler.BadRequestException("Invalid status value: " + status);
+            throw new BadRequestException("Invalid status value: " + status);
         }
     }
 
@@ -454,12 +452,12 @@ public class UserServiceImpl implements UserService {
 
         // Prevent users from deleting themselves
         if (user.getId().equals(currentUserId)) {
-            throw new GlobalExceptionHandler.BadRequestException("Cannot delete your own account");
+            throw new BadRequestException("Cannot delete your own account");
         }
 
         // Check if user has active homes (if owned)
         if (!user.getOwnedHomes().isEmpty()) {
-            throw new GlobalExceptionHandler.BadRequestException("Cannot delete user with owned homes");
+            throw new BadRequestException("Cannot delete user with owned homes");
         }
     }
 
@@ -481,7 +479,7 @@ public class UserServiceImpl implements UserService {
                     .count();
 
             if (adminCount <= removingAdminCount) {
-                throw new GlobalExceptionHandler.BadRequestException("Cannot remove your last ADMIN role");
+                throw new BadRequestException("Cannot remove your last ADMIN role");
             }
         }
     }

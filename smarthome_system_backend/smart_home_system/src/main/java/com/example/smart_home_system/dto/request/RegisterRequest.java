@@ -13,7 +13,6 @@ public class RegisterRequest {
     @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Username can only contain letters, numbers and underscore")
     private String username;
 
-    @NotBlank(message = "Email is required")
     @Email(message = "Email should be valid")
     @Size(max = 100, message = "Email must not exceed 100 characters")
     private String email;
@@ -23,7 +22,4 @@ public class RegisterRequest {
     @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).*$",
             message = "Password must contain at least one digit, one lowercase and one uppercase letter")
     private String password;
-
-    @Pattern(regexp = "^[0-9]{10,15}$", message = "Phone number should be valid")
-    private String phone;
 }

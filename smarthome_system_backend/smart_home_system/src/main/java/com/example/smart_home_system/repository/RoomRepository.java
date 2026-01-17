@@ -45,5 +45,10 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
     boolean existsByNameAndHomeId(String name, Long homeId);
 
     @Query("SELECT COUNT(d) FROM Room r JOIN r.devices d WHERE r.id = :roomId")
+
     long countDevicesInRoom(@Param("roomId") Long roomId);
+
+    @Query("SELECT COUNT(r) FROM Room r " +
+            "WHERE r.home.id = :homeId AND r.deletedAt IS null ")
+    int countByHomeIdAndStatus(@Param("homeId") Long homeId);
 }

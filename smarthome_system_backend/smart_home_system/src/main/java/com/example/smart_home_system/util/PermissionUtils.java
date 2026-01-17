@@ -31,13 +31,19 @@ public class PermissionUtils {
 
             case ADMIN:
                 return EnumSet.of(
-                        HOME_DASHBOARD_VIEW,
+                        // Home
+                        HOME_DASHBOARD_VIEW, HOME_VIEW, HOME_UPDATE,
+                        HOME_SETTINGS_VIEW, HOME_SETTINGS_UPDATE,
+                        HOME_LOGS_VIEW,
+
+                        // Members (Admin quản lý member nhưng không được xóa nhà hay chuyển quyền)
+                        MEMBER_VIEW, MEMBER_INVITE, MEMBER_UPDATE, MEMBER_REMOVE,
+
+                        // Resources
                         DEVICE_VIEW, DEVICE_CONTROL, DEVICE_CREATE, DEVICE_UPDATE, DEVICE_DELETE,
                         ROOM_VIEW, ROOM_CREATE, ROOM_UPDATE, ROOM_DELETE,
                         AUTOMATION_VIEW, AUTOMATION_CREATE, AUTOMATION_UPDATE, AUTOMATION_DELETE, AUTOMATION_EXECUTE,
-                        SCENE_VIEW, SCENE_CREATE, SCENE_UPDATE, SCENE_DELETE, SCENE_EXECUTE,
-                        MEMBER_VIEW, MEMBER_INVITE,
-                        HOME_SETTINGS_VIEW, HOME_LOGS_VIEW
+                        SCENE_VIEW, SCENE_CREATE, SCENE_UPDATE, SCENE_DELETE, SCENE_EXECUTE
                 );
 
             case MEMBER:
