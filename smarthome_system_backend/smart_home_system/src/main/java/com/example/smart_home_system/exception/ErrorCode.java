@@ -110,6 +110,7 @@ public enum ErrorCode {
     USER_ALREADY_HOME_MEMBER(5024, "User is already a member of this home", HttpStatus.CONFLICT),
     CANNOT_LEAVE_OWNED_HOME(5025, "Cannot leave home you own", HttpStatus.CONFLICT),
     HOME_DELETED(5026, "Home has been deleted", HttpStatus.CONFLICT),
+    HOME_INVALID_TIMEZONE(5027, "The time zone is invalid.", HttpStatus.CONFLICT),
 
     // Room conflicts
     ROOM_NAME_EXISTS(5030, "Room name already exists in this home", HttpStatus.CONFLICT),

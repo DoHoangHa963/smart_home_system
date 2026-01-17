@@ -10,6 +10,7 @@ import com.example.smart_home_system.enums.DeviceStatus;
 import com.example.smart_home_system.enums.HomeMemberRole;
 import com.example.smart_home_system.exception.ErrorCode;
 import com.example.smart_home_system.exception.GlobalExceptionHandler;
+import com.example.smart_home_system.exception.ResourceNotFoundException;
 import com.example.smart_home_system.mapper.DeviceMapper;
 import com.example.smart_home_system.repository.DeviceRepository;
 import com.example.smart_home_system.repository.HomeMemberRepository;
@@ -46,7 +47,7 @@ public class DeviceServiceImpl implements DeviceService {
         }
 
         Room room = roomRepository.findById(request.getRoomId())
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.ROOM_NOT_FOUND.getMessage()));
 
         if (!room.getHome().getId().equals(request.getHomeId())) {
@@ -83,7 +84,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional(readOnly = true)
     public DeviceResponse getDeviceById(Long id) {
         Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DEVICE_NOT_FOUND.getMessage()));
         return deviceMapper.toDeviceResponse(device);
     }
@@ -92,7 +93,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional(readOnly = true)
     public DeviceResponse getDeviceByCode(String code) {
         Device device = deviceRepository.findByDeviceCode(code)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DEVICE_NOT_FOUND.getMessage()));
         return deviceMapper.toDeviceResponse(device);
     }
@@ -101,7 +102,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional(readOnly = true)
     public Page<DeviceListResponse> getDevicesByRoom(Long roomId, Pageable pageable) {
         if (!roomRepository.existsById(roomId)) {
-            throw new GlobalExceptionHandler.ResourceNotFoundException("Room not found with id: " + roomId);
+            throw new ResourceNotFoundException("Room not found with id: " + roomId);
         }
 
         Page<Device> devices = deviceRepository.findByRoomIdAndDeletedAtIsNull(roomId, pageable);
@@ -119,12 +120,12 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional
     public DeviceResponse updateDevice(Long deviceId, DeviceUpdateRequest request) {
         Device device = deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DEVICE_NOT_FOUND.getMessage() + ": " + deviceId));
 
         if (request.getRoomId() != null) {
             Room newRoom = roomRepository.findById(request.getRoomId())
-                    .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                    .orElseThrow(() -> new ResourceNotFoundException(
                             "Room not found with id: " + request.getRoomId()));
             device.setRoom(newRoom);
         }
@@ -145,7 +146,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional
     public void deleteDevice(Long deviceId) {
         Device device = deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DEVICE_NOT_FOUND.getMessage() + ": " + deviceId));
 
         device.softDelete();
@@ -156,7 +157,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional
     public DeviceResponse updateDeviceStatus(Long id, DeviceStatus status) {
         Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Device not found with id: " + id));
 
         DeviceStatus oldStatus = device.getStatus();
@@ -177,7 +178,7 @@ public class DeviceServiceImpl implements DeviceService {
     public void sendCommandToDevice(String deviceCode, String command, Object payload) {
         Device device = deviceRepository.findByDeviceCode(deviceCode)
                 .orElseThrow(() -> {
-                    return new GlobalExceptionHandler.ResourceNotFoundException("Device not found with code: " + deviceCode);
+                    return new ResourceNotFoundException("Device not found with code: " + deviceCode);
                 });
 
         String payloadJson = convertToJson(payload);
@@ -262,7 +263,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional
     public void updateDeviceState(String deviceCode, Map<String, Object> state) {
         Device device = deviceRepository.findByDeviceCode(deviceCode)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Device not found with code: " + deviceCode));
 
         String stateJson = convertToJson(state);
@@ -310,7 +311,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional(readOnly = true)
     public Map<String, Object> getDeviceStatistics(Long deviceId) {
         Device device = deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorCode.DEVICE_NOT_FOUND.getMessage()));
 
         // Implement actual statistics calculation
@@ -331,7 +332,7 @@ public class DeviceServiceImpl implements DeviceService {
         // Convert string state to map if needed, or implement as needed
         // This is a simplified implementation
         Device device = deviceRepository.findByDeviceCode(deviceCode)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Device not found with code: " + deviceCode));
 
         device.setStateValue(stateValue);

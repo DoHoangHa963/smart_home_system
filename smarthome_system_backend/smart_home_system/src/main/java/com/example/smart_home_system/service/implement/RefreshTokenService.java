@@ -2,6 +2,7 @@ package com.example.smart_home_system.service.implement;
 
 import com.example.smart_home_system.entity.RefreshToken;
 import com.example.smart_home_system.exception.GlobalExceptionHandler;
+import com.example.smart_home_system.exception.ResourceNotFoundException;
 import com.example.smart_home_system.repository.RefreshTokenRepository;
 import com.example.smart_home_system.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -24,7 +25,7 @@ public class RefreshTokenService {
 
     public RefreshToken createRefreshToken(String userId) {
         var user = userRepository.findById(userId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         RefreshToken refreshToken = refreshTokenRepository.findByUser(user)
                 .orElse(new RefreshToken());
