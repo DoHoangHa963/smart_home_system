@@ -272,8 +272,6 @@ export const useDeviceStore = create<DeviceStore>()(
               devices: [...state.devices, device],
               isLoading: false,
             }));
-            
-            toast.success('Device created successfully!');
           }
         } catch (error: any) {
           console.error('createDevice error:', error);

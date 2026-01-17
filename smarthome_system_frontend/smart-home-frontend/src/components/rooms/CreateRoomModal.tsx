@@ -15,11 +15,13 @@ import { Plus, Loader2, Home } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useCreateRoom } from '@/hooks/useRoom';
+import { validateRoomName, validateRoomRequest } from '@/lib/validation/room.validation';
 
 export default function CreateRoomModal() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   
   const { currentHome } = useHomeStore();
   const createRoomMutation = useCreateRoom();
@@ -27,36 +29,60 @@ export default function CreateRoomModal() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Clear errors
+    setValidationError(null);
+    setApiError(null);
+    
     if (!currentHome) {
-      setError('Vui lòng chọn một nhà trước khi tạo phòng');
+      setValidationError('Vui lòng chọn một nhà trước khi tạo phòng');
       return;
     }
     
-    if (!name.trim()) {
-      setError('Vui lòng nhập tên phòng');
+    const trimmedName = name.trim();
+    const nameError = validateRoomName(trimmedName);
+    
+    if (nameError) {
+      setValidationError(nameError);
       return;
     }
 
-    setError(null);
-    
     try {
       await createRoomMutation.mutateAsync({
-        name: name.trim(),
+        name: trimmedName,
         homeId: currentHome.id,
       });
       
       setOpen(false);
       setName('');
+      setValidationError(null);
     } catch (err: any) {
-      setError(err.message || 'Không thể tạo phòng. Vui lòng thử lại.');
+      const errorMessage = err.response?.data?.message || 
+                          err.message || 
+                          'Không thể tạo phòng. Vui lòng thử lại.';
+      setApiError(errorMessage);
     }
   };
 
-  // Gợi ý tên phòng phổ biến
   const commonRoomNames = ['Phòng khách', 'Phòng ngủ', 'Bếp', 'Phòng tắm', 'Phòng làm việc'];
 
   const handleQuickSelect = (roomName: string) => {
     setName(roomName);
+    const error = validateRoomName(roomName);
+    setValidationError(error);
+    setApiError(null);
+  };
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    
+    // Real-time validation
+    const error = validateRoomName(value.trim());
+    setValidationError(error);
+    
+    // Clear API error when user types
+    if (apiError) {
+      setApiError(null);
+    }
   };
 
   return (
@@ -90,21 +116,30 @@ export default function CreateRoomModal() {
             
             {/* Input tên phòng */}
             <div className="space-y-2">
-              <Label htmlFor="name">Tên phòng *</Label>
+              <Label htmlFor="name">
+                Tên phòng <span className="text-red-500">*</span>
+                <span className="text-xs text-muted-foreground ml-2">
+                  ({name.trim().length}/50)
+                </span>
+              </Label>
               <Input
                 id="name"
                 value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setError(null);
-                }}
+                onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="Ví dụ: Phòng khách"
                 autoFocus
                 disabled={createRoomMutation.isPending}
+                className={validationError ? 'border-red-500' : ''}
+                maxLength={50}
               />
-              <p className="text-xs text-muted-foreground">
-                Tên phòng nên rõ ràng và dễ nhận biết
-              </p>
+              
+              {validationError ? (
+                <p className="text-sm text-red-500">{validationError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Tên phòng từ 2-50 ký tự, chỉ chứa chữ cái, số, dấu cách và các ký tự: .,-
+                </p>
+              )}
             </div>
             
             {/* Gợi ý nhanh */}
@@ -127,10 +162,10 @@ export default function CreateRoomModal() {
               </div>
             </div>
             
-            {/* Hiển thị lỗi */}
-            {error && (
+            {/* Hiển thị lỗi API */}
+            {apiError && (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{apiError}</AlertDescription>
               </Alert>
             )}
           </div>
@@ -139,14 +174,22 @@ export default function CreateRoomModal() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                setName('');
+                setValidationError(null);
+                setApiError(null);
+              }}
               disabled={createRoomMutation.isPending}
             >
               Hủy
             </Button>
             <Button 
               type="submit" 
-              disabled={createRoomMutation.isPending || !name.trim() || !currentHome}
+              disabled={createRoomMutation.isPending || 
+                       !name.trim() || 
+                       !!validationError ||
+                       !currentHome}
               className="gap-2"
             >
               {createRoomMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}

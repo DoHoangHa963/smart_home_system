@@ -1,19 +1,52 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHomeStore } from '@/store/homeStore';
+import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/store/authStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Home as HomeIcon, Plus, Users, DoorOpen, MapPin, CheckCircle2, ArrowRightLeft, Sparkles } from 'lucide-react';
+import { 
+  Loader2, Home as HomeIcon, Plus, Users, DoorOpen, MapPin, 
+  CheckCircle2, ArrowRightLeft, Sparkles, MoreVertical,
+  Edit, Trash2, UserCog, LogOut, Shield, ChevronLeft, ChevronRight,
+  ArrowRight
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import CreateHomeModal from '@/pages/home/CreateHomeModal';
-import { cn } from '@/lib/utils';
+import EditHomeModal from '@/pages/home/EditHomeModal';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { homeApi } from '@/lib/api/home.api';
 
 export default function SelectHome() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { isAdmin } = usePermission();
+
+  const [allHomes, setAllHomes] = useState<any[]>([]);
+  const [pagination, setPagination] = useState({ 
+    page: 0, 
+    size: 20, 
+    total: 0 
+  });
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
   
   const { 
     homes, 
@@ -21,23 +54,60 @@ export default function SelectHome() {
     setCurrentHome, 
     currentHome, 
     isLoading,
-    setLoading
+    setLoading,
+    deleteHome,
+    leaveHome,
+    fetchHomeMembers
   } = useHomeStore();
   
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedHome, setSelectedHome] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [homeToAction, setHomeToAction] = useState<any>(null);
 
   useEffect(() => {
-    fetchMyHomes();
-  }, []);
+    const loadHomes = async () => {
+      if (isAdmin) {
+        await fetchAllHomes({ page: 0, size: 20 });
+      } else {
+        await fetchMyHomes();
+      }
+    };
+    loadHomes();
+  }, [isAdmin]);
 
+  const fetchAllHomes = async (params: any) => {
+    setIsAdminLoading(true);
+    try {
+      const response = await homeApi.getAllHomes(params);
+      setAllHomes(response.data.content);
+      setPagination({
+        page: response.data.number,
+        size: response.data.size,
+        total: response.data.totalElements
+      });
+    } catch (error: any) {
+      toast.error(`Lỗi khi tải danh sách nhà: ${error.message || 'Có lỗi xảy ra'}`);
+    } finally {
+      setIsAdminLoading(false);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 0 || newPage * pagination.size >= pagination.total) return;
+    fetchAllHomes({ page: newPage, size: pagination.size });
+  };
   const handleSelectHome = async (home: any) => {
     if (isProcessing) return;
     setIsProcessing(true);
     setLoading(true);
     
     try {
-      await setCurrentHome(home);
+      // Truyền isAdmin vào để bypass permission check
+      await setCurrentHome(home, isAdmin);
       setTimeout(() => {
         navigate('/dashboard', { replace: true });
       }, 200);
@@ -46,6 +116,55 @@ export default function SelectHome() {
       toast.error(`Không thể chọn nhà: ${error.message || 'Có lỗi xảy ra'}`);
       setIsProcessing(false);
       setLoading(false);
+    }
+  };
+
+  const handleEditHome = (home: any) => {
+    setSelectedHome(home);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteHome = async (home: any) => {
+    setHomeToAction(home);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleLeaveHome = async (home: any) => {
+    setHomeToAction(home);
+    setLeaveDialogOpen(true);
+  };
+
+  const confirmDeleteHome = async () => {
+    if (!homeToAction) return;
+    
+    setIsProcessing(true);
+    try {
+      await deleteHome(homeToAction.id);
+      toast.success(`Đã xóa nhà "${homeToAction.name}" thành công`);
+      setDeleteDialogOpen(false);
+      setHomeToAction(null);
+      await fetchMyHomes();
+    } catch (error: any) {
+      toast.error(`Không thể xóa nhà: ${error.message || 'Có lỗi xảy ra'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const confirmLeaveHome = async () => {
+    if (!homeToAction) return;
+    
+    setIsProcessing(true);
+    try {
+      await leaveHome(homeToAction.id);
+      toast.success(`Đã rời khỏi nhà "${homeToAction.name}" thành công`);
+      setLeaveDialogOpen(false);
+      setHomeToAction(null);
+      await fetchMyHomes();
+    } catch (error: any) {
+      toast.error(`Không thể rời nhà: ${error.message || 'Có lỗi xảy ra'}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -58,11 +177,26 @@ export default function SelectHome() {
     }, 500);
   };
 
-  if (isLoading && homes.length === 0) {
+  const handleEditHomeSuccess = async (home: any) => {
+    setShowEditModal(false);
+    setSelectedHome(null);
+    await fetchMyHomes();
+    toast.success(`Đã cập nhật nhà "${home.name}" thành công!`);
+  };
+
+  const isHomeOwner = (home: any) => {
+    return home.ownerUsername === user?.username;
+  };
+
+  // SỬA LOADING STATE
+  if ((isLoading && homes.length === 0) || (isAdmin && isAdminLoading && allHomes.length === 0)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-full max-w-4xl p-6 space-y-6">
           <Skeleton className="h-12 w-64 mx-auto rounded-xl" />
+          {isAdmin && (
+            <Skeleton className="h-6 w-48 mx-auto rounded-md" />
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-56 w-full rounded-xl" />
@@ -73,8 +207,14 @@ export default function SelectHome() {
     );
   }
 
-  const activeHome = currentHome ? homes.find(h => h.id === currentHome.id) : null;
-  const otherHomes = currentHome ? homes.filter(h => h.id !== currentHome.id) : homes;
+  const displayHomes = isAdmin ? allHomes : homes;
+  const displayLoading = isAdmin ? isAdminLoading : isLoading;
+  const displayTotalHomes = isAdmin ? pagination.total : homes.length;
+
+  const activeHome = currentHome ? displayHomes.find((h: any) => h.id === currentHome.id) : null;
+  const otherHomes = activeHome 
+    ? displayHomes.filter((h: any) => h.id !== currentHome.id) 
+    : displayHomes;
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden flex flex-col items-center p-4 sm:p-6 transition-colors duration-300">
@@ -89,14 +229,33 @@ export default function SelectHome() {
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
             Chọn không gian của bạn
           </h1>
+          
+          {/* THÊM ADMIN BADGE */}
+          {isAdmin && (
+            <div className="flex items-center justify-center gap-2">
+              <Badge 
+                variant="outline" 
+                className="bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30"
+              >
+                <Shield className="h-3 w-3 mr-1" />
+                Chế độ Quản trị viên
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                Đang xem tất cả {displayTotalHomes} nhà trong hệ thống
+              </span>
+            </div>
+          )}
+          
           <p className="text-muted-foreground text-lg">
-            {homes.length > 0 
-              ? "Quản lý các ngôi nhà thông minh từ một nơi duy nhất" 
+            {displayHomes.length > 0 
+              ? isAdmin 
+                ? "Quản lý tất cả ngôi nhà trong hệ thống" 
+                : "Quản lý các ngôi nhà thông minh từ một nơi duy nhất" 
               : "Bắt đầu hành trình Smarthome bằng việc tạo ngôi nhà đầu tiên"}
           </p>
         </div>
 
-        {homes.length === 0 ? (
+        {displayHomes.length === 0 && !displayLoading ? (
           /* Empty State - Được làm đẹp hơn */
           <Card className="max-w-md mx-auto mt-10 border-dashed border-2 bg-card/50 backdrop-blur-sm">
             <CardHeader className="text-center pb-2">
@@ -153,10 +312,15 @@ export default function SelectHome() {
                             <Badge variant="outline" className="border-green-500/50 text-green-700 dark:text-green-400 bg-green-500/10">
                               Active
                             </Badge>
+                            {isHomeOwner(activeHome) && (
+                              <Badge variant="secondary" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                                Chủ nhà
+                              </Badge>
+                            )}
                           </div>
                           
                           <p className="text-sm font-medium text-muted-foreground">
-                            {activeHome.ownerUsername === user?.username ? (
+                            {isHomeOwner(activeHome) ? (
                               <span className="text-green-600 dark:text-green-500 flex items-center gap-1">
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Chủ sở hữu
                               </span>
@@ -174,11 +338,22 @@ export default function SelectHome() {
                         </div>
                       </div>
 
-                      <div className="w-full md:w-auto mt-2 md:mt-0">
+                      <div className="flex items-center gap-3">
+                        {isHomeOwner(activeHome) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditHome(activeHome)}
+                            disabled={isProcessing}
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Sửa
+                          </Button>
+                        )}
                         <Button 
                           size="lg" 
                           onClick={() => handleSelectHome(activeHome)} 
-                          className="w-full md:w-auto min-w-[160px] bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:text-white dark:hover:bg-green-500 shadow-lg shadow-green-500/20 font-semibold"
+                          className="min-w-[160px] bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:text-white dark:hover:bg-green-500 shadow-lg shadow-green-500/20 font-semibold"
                           disabled={isProcessing}
                         >
                           {isProcessing ? (
@@ -226,7 +401,6 @@ export default function SelectHome() {
                   <Card
                     key={home.id}
                     className="group relative cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border-border bg-card overflow-hidden"
-                    onClick={() => handleSelectHome(home)}
                   >
                      <div className="absolute top-0 left-0 w-1 h-full bg-primary/0 group-hover:bg-primary transition-colors duration-300" />
                     
@@ -242,11 +416,56 @@ export default function SelectHome() {
                             </CardTitle>
                              <div className="flex items-center gap-2 mt-1">
                                 <Badge variant="secondary" className="text-[10px] px-1.5 h-5 font-medium bg-secondary/50">
-                                  {home.ownerUsername === user?.username ? 'Owner' : 'Member'}
+                                  {isHomeOwner(home) ? 'Owner' : 'Member'}
                                 </Badge>
+
+                                  {/* THÊM BADGE HIỂN THỊ CHỦ NHÀ CHO ADMIN */}
+                                {isAdmin && home.ownerUsername && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 h-5 border-blue-300 text-blue-700 bg-blue-50">
+                                    Chủ: {home.ownerUsername}
+                                  </Badge>
+                                )}
                              </div>
                           </div>
                         </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleSelectHome(home)}>
+                              <ArrowRightLeft className="h-4 w-4 mr-2" />
+                              Chuyển sang
+                            </DropdownMenuItem>
+                            {isHomeOwner(home) && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleEditHome(home)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Chỉnh sửa
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600 focus:text-red-600"
+                                  onClick={() => handleDeleteHome(home)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Xóa nhà
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {!isHomeOwner(home) && (
+                              <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600"
+                                onClick={() => handleLeaveHome(home)}
+                              >
+                                <LogOut className="h-4 w-4 mr-2" />
+                                Rời khỏi
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </CardHeader>
 
@@ -269,10 +488,27 @@ export default function SelectHome() {
                         </div>
                       </div>
 
-                      <div className="pt-2 opacity-0 max-h-0 group-hover:opacity-100 group-hover:max-h-12 transition-all duration-300 ease-in-out">
-                         <Button variant="outline" size="sm" className="w-full text-xs hover:bg-primary hover:text-primary-foreground">
+                      <div className="pt-2">
+                        {!isAdmin ? (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full text-xs hover:bg-primary hover:text-primary-foreground"
+                            onClick={() => handleSelectHome(home)}
+                          >
                             Chuyển sang nhà này
-                         </Button>
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="outline"  
+                            size="sm" 
+                            className="w-full text-xs hover:bg-primary hover:text-primary-foreground"
+                            onClick={() => handleSelectHome(home)}
+                          >
+                            <ArrowRight className="h-3 w-3 mr-1" />
+                            Truy cập với tư cách Admin
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -281,13 +517,142 @@ export default function SelectHome() {
             </div>
           </div>
         )}
+        {/* THÊM SAU PHẦN GRID CARDS (trước khi đóng div space-y-10) */}
+        {isAdmin && displayHomes.length > 0 && (
+          <div className="max-w-4xl mx-auto mt-8 pt-6 border-t border-border">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium">Tổng số:</span> {pagination.total} nhà • 
+                <span className="ml-2">Trang {pagination.page + 1} / {Math.max(1, Math.ceil(pagination.total / pagination.size))}</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 0 || isAdminLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Trước
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {[...Array(Math.min(5, Math.ceil(pagination.total / pagination.size)))].map((_, i) => {
+                    const pageNum = i + 1;
+                    return (
+                      <Button
+                        key={i}
+                        variant={pagination.page + 1 === pageNum ? "default" : "outline"}
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handlePageChange(pageNum - 1)}
+                        disabled={isAdminLoading}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={(pagination.page + 1) * pagination.size >= pagination.total || isAdminLoading}
+                >
+                  Sau
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Modals */}
       <CreateHomeModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateHomeSuccess}
       />
+
+      <EditHomeModal
+        open={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedHome(null);
+        }}
+        home={selectedHome}
+        onSuccess={handleEditHomeSuccess}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xóa nhà</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa nhà "{homeToAction?.name}" không? Hành động này sẽ:
+              <ul className="mt-2 ml-4 list-disc text-sm">
+                <li>Xóa vĩnh viễn tất cả dữ liệu của nhà này</li>
+                <li>Xóa tất cả các thành viên khỏi nhà</li>
+                <li>Xóa tất cả các thiết bị và cài đặt liên quan</li>
+              </ul>
+              <p className="mt-2 font-semibold text-red-600">
+                Hành động này không thể hoàn tác!
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessing}>
+              Hủy
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteHome}
+              disabled={isProcessing}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isProcessing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Xác nhận xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Leave Home Confirmation Dialog */}
+      <AlertDialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận rời nhà</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn rời khỏi nhà "{homeToAction?.name}" không? 
+              <ul className="mt-2 ml-4 list-disc text-sm">
+                <li>Bạn sẽ mất quyền truy cập vào nhà này</li>
+                <li>Tất cả các thiết bị của bạn trong nhà sẽ bị xóa</li>
+                <li>Bạn có thể được mời lại nếu cần</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessing}>
+              Hủy
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLeaveHome}
+              disabled={isProcessing}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {isProcessing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Rời khỏi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
