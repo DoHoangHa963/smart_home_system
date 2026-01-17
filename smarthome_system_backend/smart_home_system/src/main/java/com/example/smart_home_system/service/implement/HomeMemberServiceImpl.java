@@ -16,6 +16,8 @@ import com.example.smart_home_system.service.HomeMemberService;
 import com.example.smart_home_system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +54,7 @@ public class HomeMemberServiceImpl implements HomeMemberService {
         // 3. Tìm user
         User targetUser = userRepository.findByUsername(request.getIdentifier())
                 .or(() -> userRepository.findByEmail(request.getIdentifier()))
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // 4. Validate Duplicate
         if (homeMemberRepository.existsByHomeIdAndUserId(homeId, targetUser.getId())) {
@@ -82,7 +84,7 @@ public class HomeMemberServiceImpl implements HomeMemberService {
         // 1. Lấy thông tin người thực hiện và người bị xóa
         HomeMember requester = getMemberOrThrow(homeId, currentUsername);
         HomeMember targetMember = homeMemberRepository.findByHomeIdAndUserId(homeId, targetUserId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("Member not found in this home"));
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found in this home"));
 
         // 2. Logic phân quyền xóa
         HomeMemberRole requesterRole = requester.getRole();
@@ -114,7 +116,7 @@ public class HomeMemberServiceImpl implements HomeMemberService {
 
         HomeMember requester = getMemberOrThrow(homeId, currentUsername);
         HomeMember targetMember = homeMemberRepository.findByHomeIdAndUserId(homeId, targetUserId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("Member not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
 
         // Chỉ OWNER mới được thăng cấp/giáng cấp người khác thành ADMIN/MEMBER
         // ADMIN chỉ được quản lý GUEST/MEMBER (tùy nghiệp vụ, ở đây set cứng chỉ OWNER được chỉnh role)
@@ -136,10 +138,11 @@ public class HomeMemberServiceImpl implements HomeMemberService {
     public List<HomeMemberResponse> getHomeMembers(Long homeId) {
         String currentUsername = SecurityUtils.getCurrentUsername();
 
-        // Kiểm tra xem người gọi API có thuộc nhà đó không
-        HomeMember currentMember = homeMemberRepository
-                .findByHomeIdAndUsernameWithUser(homeId, currentUsername)
-                .orElseThrow(() -> new UnauthorizedException(ErrorCode.HOME_ACCESS_DENIED));
+        if (!isSystemAdmin()) {
+            homeMemberRepository
+                    .findByHomeIdAndUsernameWithUser(homeId, currentUsername)
+                    .orElseThrow(() -> new UnauthorizedException(ErrorCode.HOME_ACCESS_DENIED));
+        }
 
         List<HomeMember> members = homeMemberRepository.findAllByHomeIdWithUser(homeId);
 
@@ -177,7 +180,7 @@ public class HomeMemberServiceImpl implements HomeMemberService {
 
         HomeMember newOwnerMember = homeMemberRepository
                 .findByHomeIdAndUserIdWithUser(homeId, newOwnerId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("Member not found in this home"));
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found in this home"));
 
         if (currentOwner.getId().equals(newOwnerMember.getId())) {
             throw new AppException(ErrorCode.BAD_REQUEST);
@@ -197,6 +200,13 @@ public class HomeMemberServiceImpl implements HomeMemberService {
 
         log.info("Ownership transferred for home {}: {} -> {}",
                 homeId, currentUsername, newOwnerMember.getUser().getUsername());
+    }
+
+    private boolean isSystemAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return false;
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
     @Override
@@ -221,6 +231,5 @@ public class HomeMemberServiceImpl implements HomeMemberService {
                 throw new UnauthorizedException(ErrorCode.INSUFFICIENT_PERMISSIONS);
             }
         }
-        // Có thể mở rộng logic so sánh cấp bậc ở đây
     }
 }

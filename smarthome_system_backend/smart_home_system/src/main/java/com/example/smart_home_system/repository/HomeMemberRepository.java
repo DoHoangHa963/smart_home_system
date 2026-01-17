@@ -69,4 +69,8 @@ public interface HomeMemberRepository extends JpaRepository<HomeMember, Long> {
 
     // Kiểm tra xem User có phải là thành viên của nhà này với Role cụ thể không (VD: OWNER)
     boolean existsByUserUsernameAndHomeIdAndRole(String username, Long homeId, HomeMemberRole role);
+
+    @Query("SELECT COUNT(hm) FROM HomeMember hm " +
+            "WHERE hm.home.id = :homeId AND hm.status = 'ACTIVE'")
+    int countByHomeId(@Param("homeId") Long homeId);
 }

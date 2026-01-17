@@ -4,6 +4,8 @@ import com.example.smart_home_system.dto.request.HomeRequest;
 import com.example.smart_home_system.dto.response.HomeMemberResponse;
 import com.example.smart_home_system.dto.response.HomeResponse;
 import com.example.smart_home_system.entity.Home;
+import com.example.smart_home_system.entity.HomeMember;
+import com.example.smart_home_system.entity.Room;
 import org.mapstruct.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -18,53 +20,21 @@ public abstract class HomeMapper {
     @Autowired
     protected HomeMemberMapper homeMemberMapper;
 
-    // Dành cho response đầy đủ (có members) - Sử dụng query riêng với fetch join
+    // FIX 1: Dùng toResponse đầy đủ (có counts)
     @Mapping(target = "ownerId", source = "owner.id")
     @Mapping(target = "ownerUsername", source = "owner.username")
-    @Mapping(target = "memberCount", ignore = true)
-    @Mapping(target = "roomCount", ignore = true)
-    @Mapping(target = "members", ignore = true)
+    @Mapping(target = "memberCount", ignore = true)  // Sẽ set trong @AfterMapping
+    @Mapping(target = "roomCount", ignore = true)    // Sẽ set trong @AfterMapping
+    @Mapping(target = "members", ignore = true)      // Sẽ set trong @AfterMapping
     public abstract HomeResponse toResponse(Home home);
 
-    @AfterMapping
-    protected void mapMembersWithFilter(Home home, @MappingTarget HomeResponse response) {
-        // Chỉ tính toán khi collection đã được fetch
-        if (home.getMembers() != null) {
-            long activeMemberCount = home.getMembers().stream()
-                    .filter(member -> member != null && member.getDeletedAt() == null)
-                    .count();
-
-            List<HomeMemberResponse> members = home.getMembers().stream()
-                    .filter(member -> member != null && member.getDeletedAt() == null)
-                    .map(homeMemberMapper::toResponse)
-                    .filter(Objects::nonNull)
-                    .toList();
-
-            response.setMembers(members);
-        } else {
-            response.setMemberCount(0);
-            response.setMembers(Collections.emptyList());
-        }
-
-        if (home.getRooms() != null) {
-            long activeRoomCount = home.getRooms().stream()
-                    .filter(room -> room != null && room.getDeletedAt() == null)
-                    .count();
-            response.setRoomCount((int) activeRoomCount);
-        } else {
-            response.setRoomCount(0);
-        }
-    }
-
-    // Dành cho response cơ bản - KHÔNG truy cập collection
+    // FIX 4: toBasicResponse cũng cần tính counts
     @Mapping(target = "ownerId", source = "owner.id")
     @Mapping(target = "ownerUsername", source = "owner.username")
-    @Mapping(target = "memberCount", expression = "java(0)")  // Mặc định 0
-    @Mapping(target = "roomCount", expression = "java(0)")    // Mặc định 0
+    @Mapping(target = "memberCount", ignore = true)  // Sẽ set trong @AfterMapping
+    @Mapping(target = "roomCount", ignore = true)    // Sẽ set trong @AfterMapping
     @Mapping(target = "members", expression = "java(java.util.Collections.emptyList())")
     public abstract HomeResponse toBasicResponse(Home home);
-
-    // Xóa @AfterMapping mapBasicResponse
 
     public abstract Home toEntity(HomeRequest request);
 

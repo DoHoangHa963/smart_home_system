@@ -17,8 +17,10 @@ public class HouseSecurity {
      */
     public boolean isMemberByRoomId(Long roomId, Authentication authentication) {
 
-        if (authentication == null || roomId == null) {
-            return false;
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (isAdmin) {
+            return true;
         }
 
         // 2. Lấy username từ Security Context (User đang đăng nhập)

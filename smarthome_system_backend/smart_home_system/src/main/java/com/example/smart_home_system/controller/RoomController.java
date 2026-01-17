@@ -117,7 +117,7 @@ public class RoomController {
             value = RequestApi.ROOM_LIST_BY_HOME,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
     public ResponseEntity<ApiResponse<Page<RoomResponse>>> getRoomsByHomeId(
             @PathVariable("homeId") Long homeId,
             @Parameter(description = "Pagination parameters")
@@ -137,7 +137,7 @@ public class RoomController {
             value = "/home/{homeId}/search",
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
     public ResponseEntity<ApiResponse<Page<RoomResponse>>> searchRooms(
             @PathVariable("homeId") Long homeId,
             @RequestParam(value = "name", required = false) String name,

@@ -13,7 +13,6 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -46,7 +45,8 @@ public class GlobalExceptionHandler {
             DuplicateResourceException ex,
             HttpServletRequest request
     ) {
-        ErrorCode errorCode = ErrorCode.CONFLICT;
+        // Sử dụng mã lỗi cụ thể cho user đã là thành viên
+        ErrorCode errorCode = ErrorCode.USER_ALREADY_HOME_MEMBER; // 5024
         log.warn("[DuplicateResourceException] {} - {}", errorCode.getCode(), ex.getMessage());
         return buildResponse(errorCode, request.getRequestURI(), ex.getMessage());
     }
@@ -241,23 +241,5 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(builder.build());
-    }
-
-    public static class ResourceNotFoundException extends RuntimeException {
-        public ResourceNotFoundException(String message) {
-            super(message);
-        }
-    }
-
-    public static class BadRequestException extends RuntimeException {
-        public BadRequestException(String message) {
-            super(message);
-        }
-    }
-
-    public static class DuplicateResourceException extends RuntimeException {
-        public DuplicateResourceException(String message) {
-            super(message);
-        }
     }
 }

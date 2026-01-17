@@ -4,7 +4,6 @@ import com.example.smart_home_system.constant.RequestApi;
 import com.example.smart_home_system.dto.request.HomeRequest;
 import com.example.smart_home_system.dto.response.ApiResponse;
 import com.example.smart_home_system.dto.response.HomeResponse;
-import com.example.smart_home_system.enums.HomePermission;
 import com.example.smart_home_system.service.HomeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -53,7 +52,8 @@ public class HomeController {
             value = RequestApi.HOME_GET_BY_ID,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+//    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#homeId, 'HOME', 'HOME_VIEW')")
     public ResponseEntity<ApiResponse<HomeResponse>> getHomeById(@PathVariable("homeId") Long homeId) {
         log.debug("Getting home by ID: {}", homeId);
         HomeResponse homeResponse = homeService.getHomeById(homeId);
@@ -65,7 +65,8 @@ public class HomeController {
             value = RequestApi.HOME_WITH_MEMBERS,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+//    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#homeId, 'HOME', 'MEMBER_VIEW')")
     public ResponseEntity<ApiResponse<HomeResponse>> getHomeWithMembers(@PathVariable("homeId") Long homeId) {
         log.debug("Getting home with members: {}", homeId);
         HomeResponse homeResponse = homeService.getHomeWithMembers(homeId);
@@ -133,7 +134,7 @@ public class HomeController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeOwner(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#homeId, 'HOME', 'HOME_UPDATE')")
     public ResponseEntity<ApiResponse<HomeResponse>> updateHome(
             @PathVariable("homeId") Long homeId,
             @Valid @RequestBody HomeRequest request
@@ -148,7 +149,7 @@ public class HomeController {
             value = RequestApi.HOME_TRANSFER_OWNERSHIP,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeOwner(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#homeId, 'HOME', 'HOME_TRANSFER_OWNERSHIP')")
     public ResponseEntity<ApiResponse<Void>> transferOwnership(
             @PathVariable("homeId") Long homeId,
             @Parameter(description = "ID of the new owner") @RequestParam String newOwnerId
@@ -164,7 +165,7 @@ public class HomeController {
             value = RequestApi.HOME_DELETE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeOwner(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#homeId, 'HOME', 'HOME_DELETE')")
     public ResponseEntity<ApiResponse<Void>> deleteHome(@PathVariable("homeId") Long homeId) {
         log.info("Deleting home with ID: {}", homeId);
         homeService.deleteHome(homeId);
@@ -176,7 +177,7 @@ public class HomeController {
             value = RequestApi.HOME_LEAVE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeMember(#homeId) and not @homeService.isHomeOwner(#homeId)")
+    @PreAuthorize("hasPermission(#homeId, 'HOME', 'HOME_VIEW')")
     public ResponseEntity<ApiResponse<Void>> leaveHome(@PathVariable("homeId") Long homeId) {
         log.info("User leaving home: {}", homeId);
         homeService.leaveHome(homeId);
