@@ -88,54 +88,67 @@ export default function Header() {
 
       {/* RIGHT ACTIONS */}
       <div className="flex items-center gap-2 ml-auto">
-        {/* HOME SELECTOR - DESKTOP ONLY (hidden sm:flex) */}
-          <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={openCombobox}
-                className="w-[200px] justify-between hidden sm:flex"
-              >
-                {currentHome ? (
-                  <span className="truncate">{currentHome.name}</span>
-                ) : (
-                  <span className="text-muted-foreground">Chọn nhà...</span>
-                )}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0">
-              <Command>
-                <CommandInput placeholder="Tìm nhà..." />
-                <CommandList>
-                  <CommandEmpty>Không tìm thấy nhà.</CommandEmpty>
-                  <CommandGroup heading="Nhà của bạn">
-                    {homes?.map((home) => (
-                      <CommandItem
-                        key={home.id}
-                        onSelect={() => handleHomeSelect(home)}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            currentHome?.id === home.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        {home.name}
+        {/* HOME SELECTOR - CHỈ HIỂN THỊ CHO USER THƯỜNG */}
+        {!isAdmin && (
+          <div className="hidden sm:flex items-center">
+            <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openCombobox}
+                  className="w-[200px] justify-between"
+                >
+                  {currentHome ? (
+                    <span className="truncate">{currentHome.name}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Chọn nhà...</span>
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0">
+                <Command>
+                  <CommandInput placeholder="Tìm nhà..." />
+                  <CommandList>
+                    <CommandEmpty>Không tìm thấy nhà.</CommandEmpty>
+                    <CommandGroup heading="Nhà của bạn">
+                      {homes?.map((home) => (
+                        <CommandItem
+                          key={home.id}
+                          onSelect={() => handleHomeSelect(home)}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              currentHome?.id === home.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {home.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => navigate('/select-home')}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Tạo nhà mới
                       </CommandItem>
-                    ))}
-                  </CommandGroup>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => navigate('/select-home')}>
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Tạo nhà mới
-                    </CommandItem>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+
+        {/* ADMIN VIEW - HIỂN THỊ SỐ LƯỢNG NHÀ */}
+        {isAdmin && (
+          <div className="hidden sm:flex items-center gap-2 px-3">
+            <span className="text-sm text-muted-foreground">
+              Đang xem: <span className="font-medium">{currentHome?.name || "Tổng quan hệ thống"}</span>
+            </span>
+          </div>
+        )}
           
         {/* ADMIN BADGE */}
         {isAdmin && (
@@ -197,92 +210,63 @@ export default function Header() {
 
             {/* MOBILE ONLY */}
             <div className="sm:hidden">
+              {!isAdmin && (
+                <>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setOpenMobileHome(prev => !prev);
+                    }}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Home className="h-4 w-4" />
+                      Chọn nhà
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="max-w-[80px] truncate">
+                        {currentHome?.name || "Chưa chọn"}
+                      </span>
+                      <ChevronsUpDown
+                        className={cn("h-4 w-4 transition-transform", openMobileHome && "rotate-180")}
+                      />
+                    </div>
+                  </DropdownMenuItem>
+
+                  {openMobileHome && (
+                    <div className="pl-8 space-y-1 my-1">
+                      {homes?.map((home) => (
+                        <DropdownMenuItem 
+                          key={home.id} 
+                          onClick={() => handleHomeSelect(home)} 
+                          className="text-sm cursor-pointer"
+                        >
+                          {home.name}
+                          {currentHome?.id === home.id && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => navigate('/select-home')} className="text-sm cursor-pointer">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Tạo nhà mới
+                      </DropdownMenuItem>
+                    </div>
+                  )}
+                </>
+              )}
               
-              {/* --- START: MOBILE HOME SELECTOR --- */}
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setOpenMobileHome(prev => !prev);
-                }}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
+              {/* ADMIN MOBILE VIEW */}
+              {isAdmin && (
+                <DropdownMenuItem className="flex items-center gap-2">
                   <Home className="h-4 w-4" />
-                  Chọn nhà
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="max-w-[80px] truncate">
-                    {currentHome?.name || "Chưa chọn"}
-                  </span>
-                  <ChevronsUpDown
-                    className={cn("h-4 w-4 transition-transform", openMobileHome && "rotate-180")}
-                  />
-                </div>
-              </DropdownMenuItem>
-
-              {openMobileHome && (
-                <div className="pl-8 space-y-1 my-1">
-                  {homes?.map((home) => (
-                    <DropdownMenuItem 
-                      key={home.id} 
-                      onClick={() => handleHomeSelect(home)} 
-                      className="text-sm cursor-pointer"
-                    >
-                      {home.name}
-                      {currentHome?.id === home.id && <Check className="ml-auto h-4 w-4" />}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate('/select-home')} className="text-sm cursor-pointer">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Tạo nhà mới
-                  </DropdownMenuItem>
-                </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm">Chế độ Admin</span>
+                    <span className="text-xs text-muted-foreground">
+                      {homes?.length || 0} nhà trong hệ thống
+                    </span>
+                  </div>
+                </DropdownMenuItem>
               )}
-              {/* --- END: MOBILE HOME SELECTOR --- */}
-
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setOpenTheme(prev => !prev);
-                }}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <Sun className="h-4 w-4" />
-                  Giao diện
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {theme === "dark" ? "Tối" : theme === "light" ? "Sáng" : "Hệ thống"}
-                  <ChevronsUpDown
-                    className={cn("h-4 w-4 transition-transform", openTheme && "rotate-180")}
-                  />
-                </div>
-              </DropdownMenuItem>
-
-              {openTheme && (
-                <div className="pl-8">
-                  <DropdownMenuItem onClick={() => setTheme("light")} className="text-sm">
-                    Sáng
-                    {theme === "light" && <Check className="ml-auto h-4 w-4" />}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setTheme("dark")} className="text-sm">
-                    Tối
-                    {theme === "dark" && <Check className="ml-auto h-4 w-4" />}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setTheme("system")} className="text-sm">
-                    Theo hệ thống
-                    {theme === "system" && <Check className="ml-auto h-4 w-4" />}
-                  </DropdownMenuItem>
-                </div>
-              )}
-
-              <DropdownMenuItem>
-                <Bell className="mr-2 h-4 w-4" />
-                Thông báo
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
             </div>
 
             <DropdownMenuItem className="text-red-600 cursor-pointer" onClick={logout}>

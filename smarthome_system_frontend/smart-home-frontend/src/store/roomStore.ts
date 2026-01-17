@@ -14,6 +14,7 @@ import {
 } from '@/types/room';
 import { ApiError } from '@/types/api';
 import roomApi from '@/lib/api/room.api';
+import { validateRoomRequest } from '@/lib/validation/room.validation';
 
 interface RoomState {
   // State
@@ -215,6 +216,10 @@ export const useRoomStore = create<RoomState>()(
         createNewRoom: async (data) => {
           set({ loading: true, error: null });
           try {
+            const validationResult = validateRoomRequest(data);
+            if (!validationResult.isValid) {
+              throw new Error(Object.values(validationResult.errors).join(', '));
+            }
             const newRoom = await roomApi.createRoom(data);
             
             // Update local state
@@ -236,6 +241,9 @@ export const useRoomStore = create<RoomState>()(
             
             return newRoom;
           } catch (error: any) {
+            const errorMessage = error.response?.data?.message || 
+                        error.message || 
+                        'Failed to create room';
             set({
               error: error.response?.data?.message || 'Failed to create room',
               loading: false,
@@ -247,6 +255,10 @@ export const useRoomStore = create<RoomState>()(
         updateExistingRoom: async (roomId, data) => {
           set({ loading: true, error: null });
           try {
+            const validationResult = validateRoomRequest(data);
+            if (!validationResult.isValid) {
+              throw new Error(Object.values(validationResult.errors).join(', '));
+            }
             const updatedRoom = await roomApi.updateRoom(roomId, data);
             
             // Update local state
@@ -270,6 +282,9 @@ export const useRoomStore = create<RoomState>()(
             
             return updatedRoom;
           } catch (error: any) {
+             const errorMessage = error.response?.data?.message || 
+                        error.message || 
+                        'Failed to update room';
             set({
               error: error.response?.data?.message || 'Failed to update room',
               loading: false,
