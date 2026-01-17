@@ -39,6 +39,8 @@ export interface LoginResponse {
 export interface AuthState {
   user: User | null;
   accessToken: string | null;
+  refreshToken: string | null;
+  setTokens: (accessToken: string, refreshToken: string) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (data: LoginResponse) => void;

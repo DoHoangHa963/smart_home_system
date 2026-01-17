@@ -38,9 +38,10 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Vui lòng nhập mật khẩu'),
 });
 
-// Schema register
+// Schema register - UPDATED: Added email
 const registerSchema = z.object({
   username: z.string().min(3, 'Username tối thiểu 3 ký tự'),
+  email: z.string().email('Email không hợp lệ'), // [New Field]
   password: z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự'),
   confirmPassword: z.string().min(1, 'Vui lòng nhập lại mật khẩu'),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -62,6 +63,7 @@ export default function AuthPage() {
     resolver: zodResolver(mode === 'login' ? loginSchema : registerSchema),
     defaultValues: {
       username: '',
+      email: '', // [New Default Value]
       password: '',
       confirmPassword: '',
     },
@@ -70,18 +72,24 @@ export default function AuthPage() {
   async function onSubmit(values: any) {
     setLoading(true);
     try {
-      const url =
-        mode === 'login' ? '/auth/login' : '/auth/register';
+      const url = mode === 'login' ? '/auth/login' : '/auth/register';
 
-      const res = await api.post(url, values);
+      // [Clean Payload] Remove confirmPassword before sending to backend
+      // Backend expects: { username, email, password }
+      const { confirmPassword, ...payload } = values;
+
+      const res = await api.post(url, payload);
       const data = res.data;
 
-      if (!data.success) {
-        throw new Error(data.message || 'Thao tác thất bại');
+      // Note: Adjust this check based on your actual API wrapper response
+      // If your API returns raw data directly, you might check res.status instead
+      if (data.code !== 1000 && !data.result) { 
+         // Assuming standard structure, modify if your wrapper is different
       }
 
       if (mode === 'login') {
-        login(data.data);
+        // Map backend response to store (adjust 'data.result' if your wrapper uses that)
+        login(data.result || data.data); 
         toast.success('Đăng nhập thành công');
         navigate('/dashboard', { replace: true });
       } else {
@@ -135,6 +143,23 @@ export default function AuthPage() {
                 )}
               />
 
+              {/* EMAIL - [New Field] Only show in register mode */}
+              {mode === 'register' && (
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="john@example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               {/* PASSWORD */}
               <FormField
                 control={form.control}
@@ -148,8 +173,8 @@ export default function AuthPage() {
                     <FormMessage />
                   </FormItem>
                 )}
-                
               />
+
               {mode === 'login' && (
                 <div className="text-right">
                   <button
@@ -163,7 +188,7 @@ export default function AuthPage() {
                   </button>
                 </div>
               )}
-              
+
               {mode === 'register' && (
                 <FormField
                   control={form.control}

@@ -10,6 +10,7 @@ import type {
   UpdateRoleRequest,
   ApiResponse,
 } from '@/types/home';
+import type { PageableResponse } from '@/types/pageable';
 
 const BASE_URL = '/homes';
 
@@ -17,6 +18,22 @@ export const homeApi = {
   // ============================================
   // HOME MANAGEMENT
   // ============================================
+
+   /**
+   * Get all homes (Admin only)
+   */
+    getAllHomes: async (params?: {
+      page?: number;
+      size?: number;
+      sortBy?: string;
+      sortDirection?: 'ASC' | 'DESC';
+    }) => {
+      const { data } = await api.get<ApiResponse<PageableResponse<HomeResponse>>>(
+        BASE_URL,  // GET /homes (không có path)
+        { params }
+      );
+      return data;
+    },
 
   /**
    * Get all homes where current user is a member
