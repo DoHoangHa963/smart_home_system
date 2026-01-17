@@ -19,6 +19,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -262,12 +264,29 @@ public class RoomServiceImpl implements RoomService {
         return response;
     }
 
+    // ================= HELPER METHODS =================
+
+    /**
+     * Kiểm tra xem user hiện tại có phải là System Admin không
+     */
+    private boolean isSystemAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return false;
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
     // Helper method to check write permission (OWNER or ADMIN only)
     private void validateWritePermission(Long homeId, String userId) {
+        // 1. Nếu là System Admin -> Cho phép luôn
+        if (isSystemAdmin()) {
+            return;
+        }
+
         HomeMember member = homeMemberRepository.findByHomeIdAndUserId(homeId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
 
-        // Only OWNER or ADMIN can create/modify rooms
+        // Only OWNER or ADMIN (Home Level) can create/modify rooms
         if (member.getRole() != HomeMemberRole.OWNER && member.getRole() != HomeMemberRole.ADMIN) {
             throw new AppException(ErrorCode.INSUFFICIENT_PERMISSIONS);
         }
@@ -275,6 +294,11 @@ public class RoomServiceImpl implements RoomService {
 
     // Helper method to check read permission (any member can view)
     private void validateReadPermission(Long homeId, String userId) {
+        // 1. Nếu là System Admin -> Cho phép luôn
+        if (isSystemAdmin()) {
+            return;
+        }
+
         if (homeMemberRepository.findByHomeIdAndUserId(homeId, userId).isEmpty()) {
             throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
         }

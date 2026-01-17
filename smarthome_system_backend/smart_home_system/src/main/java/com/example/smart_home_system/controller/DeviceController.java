@@ -64,7 +64,7 @@ public class DeviceController {
             )
     })
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#request.homeId)")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#request.homeId, 'HOME', 'DEVICE_CREATE')")
     public ResponseEntity<ApiResponse<DeviceResponse>> createDevice(
             @Valid @RequestBody DeviceCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Device created successfully", deviceService.createDevice(request)));
@@ -85,7 +85,7 @@ public class DeviceController {
             )
     })
     @GetMapping(RequestApi.DEVICE_GET_BY_ID)
-    @PreAuthorize("hasRole('ADMIN') or @deviceService.isDeviceMember(#deviceId)")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_VIEW')")
     public ResponseEntity<ApiResponse<DeviceResponse>> getDeviceById(@PathVariable Long deviceId) {
         return ResponseEntity.ok(ApiResponse.success("Device retrieved", deviceService.getDeviceById(deviceId)));
     }
@@ -263,7 +263,7 @@ public class DeviceController {
             )
     })
     @PatchMapping(RequestApi.DEVICE_UPDATE_STATUS)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_WRITE')")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_UPDATE')")
     public ResponseEntity<ApiResponse<DeviceResponse>> updateDeviceStatus(
             @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId,
@@ -320,7 +320,7 @@ public class DeviceController {
             )
     })
     @PostMapping(RequestApi.DEVICE_TURN_ON)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HOME_OWNER') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_CONTROL')")
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#deviceId, 'DEVICE', 'DEVICE_CONTROL')")
     public ResponseEntity<ApiResponse<Void>> turnOnDevice(
             @Parameter(description = "Device ID", required = true, example = "1")
             @PathVariable Long deviceId) {

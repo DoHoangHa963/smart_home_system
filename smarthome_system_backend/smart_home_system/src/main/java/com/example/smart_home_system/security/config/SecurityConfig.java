@@ -1,6 +1,7 @@
 package com.example.smart_home_system.security.config;
 
 import com.example.smart_home_system.constant.RequestApi;
+import com.example.smart_home_system.security.jwt.JwtAuthenticationEntryPoint;
 import com.example.smart_home_system.security.jwt.JwtAuthenticationFilter;
 import com.example.smart_home_system.security.service.CustomPermissionEvaluator;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AuthenticationProvider authenticationProvider;
     private final CustomPermissionEvaluator customPermissionEvaluator;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final WebConfig webConfig;
 
     @Bean
@@ -45,13 +47,18 @@ public class SecurityConfig {
                                 RequestApi.AUTH + RequestApi.AUTH_FORGOT_PASSWORD,
                                 RequestApi.AUTH + RequestApi.AUTH_RESET_PASSWORD,
                                 RequestApi.AUTH + RequestApi.AUTH_VERIFY_OTP,
+                                RequestApi.AUTH + RequestApi.AUTH_REFRESH_TOKEN,
                                 "v3/api-docs/**", "swagger-ui/**", "swagger-ui.html"
                         ).permitAll()
 
                         .requestMatchers(RequestApi.HEALTH + "/**").permitAll()
                         .requestMatchers(RequestApi.ADMIN + "/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, RequestApi.FILE + "/download/**").permitAll()
+                        .requestMatchers("/api/v1/rooms/**").authenticated()
                         .anyRequest().authenticated()
+                )
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider)

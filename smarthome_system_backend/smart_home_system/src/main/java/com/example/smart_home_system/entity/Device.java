@@ -53,4 +53,14 @@ public class Device extends BaseEntity {
 
     @OneToMany(mappedBy = "device", cascade = CascadeType.ALL)
     private Set<DeviceAction> actions = new HashSet<>();
+
+    /**
+     * Helper method để lấy nhanh HomeId từ Room
+     */
+    public Long getHomeId() {
+        if (this.room != null && this.room.getHome() != null) {
+            return this.room.getHome().getId();
+        }
+        return null;
+    }
 }

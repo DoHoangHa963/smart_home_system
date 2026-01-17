@@ -56,7 +56,43 @@ public interface HomeRepository extends JpaRepository<Home, Long> {
 
     Page<Home> findAll(Specification<Home> spec, Pageable pageable);
 
-    long countByOwnerId(String ownerId);
+    long countByOwnerIdAndDeletedAtIsNull(String ownerId);
 
     long countByCreatedAtAfter(LocalDateTime timestamp);
+
+    @Query("SELECT DISTINCT h FROM Home h " +
+            "LEFT JOIN FETCH h.members m " +     // FETCH ở đây OK vì không phân trang
+            "LEFT JOIN FETCH h.rooms r " +      // FETCH ở đây OK
+            "WHERE h.id = :homeId")
+    Optional<Home> findByIdWithMembersAndRoomsFull(@Param("homeId") Long homeId);
+
+    @Query("SELECT DISTINCT h FROM Home h " +
+            "LEFT JOIN h.members m " +          // Không dùng FETCH
+            "LEFT JOIN h.rooms r " +           // Không dùng FETCH
+            "WHERE EXISTS (SELECT hm FROM HomeMember hm WHERE hm.home = h AND hm.user.id = :userId AND hm.status = 'ACTIVE') " +
+            "AND h.deletedAt IS NULL")
+    Page<Home> findByUserIdWithOwnerAndMembersAndRooms(
+            @Param("userId") String userId,
+            Pageable pageable
+    );
+    @Query("SELECT COUNT(hm) FROM HomeMember hm " +
+            "WHERE hm.home.id = :homeId AND hm.status = 'ACTIVE'")
+    int countMembersByHomeId(@Param("homeId") Long homeId);
+
+    @Query("SELECT COUNT(r) FROM Room r " +
+            "WHERE r.home.id = :homeId AND r.deletedAt IS NULL")
+    int countRoomsByHomeId(@Param("homeId") Long homeId);
+
+    @Query("SELECT h.id FROM Home h " +
+            "JOIN h.members hm " +
+            "WHERE hm.user.id = :userId " +
+            "AND hm.status = 'ACTIVE' " +
+            "AND h.deletedAt IS NULL")
+    Page<Long> findHomeIdsByUserId(@Param("userId") String userId, Pageable pageable);
+
+    @Query("SELECT DISTINCT h FROM Home h " +
+            "LEFT JOIN FETCH h.members m " +
+            "LEFT JOIN FETCH h.rooms r " +
+            "WHERE h.id IN :homeIds")
+    List<Home> findAllByIdWithMembersAndRooms(@Param("homeIds") List<Long> homeIds);
 }
