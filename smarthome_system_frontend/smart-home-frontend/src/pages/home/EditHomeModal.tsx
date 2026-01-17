@@ -1,5 +1,4 @@
-// pages/home/CreateHomeModal.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useHomeStore } from '@/store/homeStore';
 import {
   Dialog,
@@ -12,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -19,14 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Home } from 'lucide-react';
-import type { Home as HomeType } from '@/types/home';
+import { Loader2, Home } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface CreateHomeModalProps {
+interface EditHomeModalProps {
   open: boolean;
   onClose: () => void;
-  onSuccess?: (home: HomeType) => void;
+  home: any | null;
+  onSuccess: (home: any) => void;
 }
 
 interface FormErrors {
@@ -35,7 +35,7 @@ interface FormErrors {
   timeZone?: string;
 }
 
-// Danh sách múi giờ phổ biến
+// Danh sách múi giờ phổ biến (dùng chung với CreateHomeModal)
 const TIME_ZONES = [
   { value: 'Asia/Ho_Chi_Minh', label: 'Việt Nam (GMT+7)' },
   { value: 'Asia/Bangkok', label: 'Thái Lan (GMT+7)' },
@@ -60,15 +60,26 @@ const TIME_ZONES = [
   { value: 'America/Sao_Paulo', label: 'Brazil (GMT-3)' },
 ];
 
-export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHomeModalProps) {
-  const { createHome, isLoading } = useHomeStore();
+export default function EditHomeModal({ open, onClose, home, onSuccess }: EditHomeModalProps) {
+  const { updateHome } = useHomeStore();
   const [formData, setFormData] = useState({
     name: '',
     address: '',
-    timeZone: 'Asia/Ho_Chi_Minh', // Mặc định Việt Nam
+    timeZone: 'Asia/Ho_Chi_Minh',
   });
-
   const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (home) {
+      setFormData({
+        name: home.name || '',
+        address: home.address || '',
+        timeZone: home.timeZone || 'Asia/Ho_Chi_Minh',
+      });
+      setErrors({});
+    }
+  }, [home]);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -89,7 +100,7 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
       newErrors.address = 'Địa chỉ không được quá 200 ký tự';
     }
 
-    // Validate múi giờ (luôn có giá trị vì là select)
+    // Validate múi giờ
     if (!formData.timeZone) {
       newErrors.timeZone = 'Vui lòng chọn múi giờ';
     }
@@ -117,75 +128,88 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!validateForm()) {
       return;
     }
 
+    if (!home) {
+      toast.error('Không tìm thấy thông tin nhà');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const newHome = await createHome(
-        formData.name.trim(),
-        formData.address.trim() || undefined,
-        formData.timeZone || 'Asia/Ho_Chi_Minh'
+      await updateHome(
+        home.id, 
+        formData.name.trim(), 
+        formData.address.trim(), 
+        formData.timeZone
       );
-
-      // Reset form
-      setFormData({
-        name: '',
-        address: '',
-        timeZone: 'Asia/Ho_Chi_Minh',
-      });
-      setErrors({});
-
-      // Call success callback
-      if (onSuccess) {
-        onSuccess(newHome);
-      }
-
-      toast.success('Tạo nhà thành công!');
-      onClose();
+      
+      const updatedHome = {
+        ...home,
+        name: formData.name.trim(),
+        address: formData.address.trim(),
+        timeZone: formData.timeZone,
+      };
+      
+      onSuccess(updatedHome);
+      toast.success('Cập nhật thông tin nhà thành công!');
     } catch (error: any) {
-      console.error('Failed to create home:', error);
-      toast.error(error.message || 'Không thể tạo nhà. Vui lòng thử lại.');
+      console.error('Update home error:', error);
+      toast.error(`Không thể cập nhật nhà: ${error.message || 'Có lỗi xảy ra'}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    setFormData({
-      name: '',
-      address: '',
-      timeZone: 'Asia/Ho_Chi_Minh',
-    });
+    if (home) {
+      setFormData({
+        name: home.name || '',
+        address: home.address || '',
+        timeZone: home.timeZone || 'Asia/Ho_Chi_Minh',
+      });
+    }
     setErrors({});
     onClose();
+  };
+
+  // Tìm tên múi giờ hiện tại để hiển thị
+  const getCurrentTimeZoneLabel = () => {
+    const tz = TIME_ZONES.find(tz => tz.value === formData.timeZone);
+    return tz ? tz.label : formData.timeZone;
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Home className="h-6 w-6 text-primary" />
-          </div>
-          <DialogTitle className="text-center">Tạo nhà mới</DialogTitle>
-          <DialogDescription className="text-center">
-            Tạo một ngôi nhà mới để quản lý thiết bị thông minh của bạn
-          </DialogDescription>
-        </DialogHeader>
-
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Home className="h-5 w-5" />
+              Chỉnh sửa thông tin nhà
+            </DialogTitle>
+            <DialogDescription>
+              Cập nhật thông tin của ngôi nhà
+              {home?.name && (
+                <span className="font-medium ml-1">"{home.name}"</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
             {/* Tên nhà */}
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="name">
                 Tên nhà <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="name"
                 name="name"
-                placeholder="Ví dụ: Nhà của tôi, Biệt thự Hạ Long..."
                 value={formData.name}
                 onChange={handleInputChange}
+                placeholder="Nhập tên nhà"
                 className={errors.name ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 maxLength={50}
               />
@@ -194,7 +218,7 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
                   <p className="text-sm text-red-500">{errors.name}</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Từ 3-50 ký tự, có thể chứa chữ, số, dấu cách, dấu phẩy, dấu chấm, gạch ngang
+                    Từ 3-50 ký tự
                   </p>
                 )}
                 <span className="text-xs text-muted-foreground">
@@ -204,14 +228,15 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
             </div>
 
             {/* Địa chỉ */}
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="address">Địa chỉ</Label>
-              <Input
+              <Textarea
                 id="address"
                 name="address"
-                placeholder="Ví dụ: Số 123, Đường Nguyễn Trãi, Quận 1, TP.HCM"
                 value={formData.address}
                 onChange={handleInputChange}
+                placeholder="Nhập địa chỉ chi tiết"
+                rows={3}
                 className={errors.address ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 maxLength={200}
               />
@@ -230,7 +255,7 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
             </div>
 
             {/* Múi giờ */}
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="timeZone">
                 Múi giờ <span className="text-red-500">*</span>
               </Label>
@@ -242,7 +267,9 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
                   id="timeZone"
                   className={errors.timeZone ? 'border-red-500 focus:ring-red-500' : ''}
                 >
-                  <SelectValue placeholder="Chọn múi giờ" />
+                  <SelectValue placeholder="Chọn múi giờ">
+                    {getCurrentTimeZoneLabel()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {TIME_ZONES.map((tz) => (
@@ -256,18 +283,29 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
                 <p className="text-sm text-red-500">{errors.timeZone}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Múi giờ sẽ được sử dụng cho các tự động hóa và lịch trình
+                  Múi giờ hiện tại: {getCurrentTimeZoneLabel()}
                 </p>
               )}
             </div>
           </div>
-
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClose}
+              disabled={isSubmitting}
+            >
               Hủy
             </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Đang tạo...' : 'Tạo nhà'}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang cập nhật...
+                </>
+              ) : (
+                'Cập nhật'
+              )}
             </Button>
           </DialogFooter>
         </form>

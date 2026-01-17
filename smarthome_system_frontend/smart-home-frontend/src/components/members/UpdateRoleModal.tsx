@@ -1,4 +1,3 @@
-// components/members/UpdateRoleModal.tsx
 import { useState } from 'react';
 import { useHomeStore } from '@/store/homeStore';
 import {
@@ -19,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Shield } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast'; // Import hook toast
 import type { HomeMember } from '@/types/home';
 
 interface UpdateRoleModalProps {
@@ -36,6 +36,7 @@ export default function UpdateRoleModal({
 }: UpdateRoleModalProps) {
   const { updateMemberRole, isLoading } = useHomeStore();
   const [newRole, setNewRole] = useState<string>(member.role);
+  const { toast } = useToast(); // Sử dụng toast
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +48,25 @@ export default function UpdateRoleModal({
 
     try {
       await updateMemberRole(homeId, member.userId, newRole);
+      
+      // Thông báo thành công (Store cũng có thể đã toast, nhưng thêm ở đây để chắc chắn UX mượt mà)
+      // Nếu store đã có toast success thì bạn có thể bỏ dòng này
+      /* toast({
+        title: "Cập nhật thành công",
+        description: `Đã thay đổi vai trò của ${member.username} thành ${newRole}`,
+      });
+      */
+      
       onClose();
-    } catch (error) {
-      console.error('Failed to update role:', error);
+    } catch (err: any) {
+      console.error('Failed to update role:', err);
+      // Hiển thị lỗi nếu có sự cố
+      const errorDetail = err.response?.data?.detail || err.response?.data?.message || 'Có lỗi xảy ra';
+      toast({
+        variant: "destructive",
+        title: "Lỗi cập nhật",
+        description: errorDetail,
+      });
     }
   };
 

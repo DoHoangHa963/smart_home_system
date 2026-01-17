@@ -1,31 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useDeviceStore } from '@/store/deviceStore';
-import { useRoomsByHome } from '@/hooks/useRoom'; // [CHANGE] Import hook
+import { useRoomsByHome } from '@/hooks/useRoom';
 import { DeviceType } from '@/types/device';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from '@/components/ui/form';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,11 +16,27 @@ import { PlusCircle, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 
+// --- CẬP NHẬT SCHEMA (Đồng bộ với Backend) ---
 const formSchema = z.object({
-  name: z.string().min(2, 'Tên thiết bị phải có ít nhất 2 ký tự'),
-  deviceCode: z.string().min(3, 'Mã thiết bị phải có ít nhất 3 ký tự'),
-  deviceType: z.nativeEnum(DeviceType),
+  name: z.string().trim()
+    .min(1, 'Vui lòng nhập tên thiết bị')
+    .max(100, 'Tên quá dài'),
+    
+  deviceCode: z.string().trim()
+    .min(1, 'Vui lòng nhập mã thiết bị')
+    .min(3, 'Mã phải có ít nhất 3 ký tự') // Backend yêu cầu min size
+    .max(50, 'Mã quá dài (tối đa 50 ký tự)')
+    // [QUAN TRỌNG] Regex khớp với BE: ^[A-Za-z0-9_]+$
+    // Chỉ cho phép: Chữ hoa, Chữ thường, Số, Gạch dưới (_)
+    // KHÔNG cho phép: Gạch ngang (-), Khoảng trắng, Ký tự đặc biệt khác
+    .regex(/^[a-zA-Z0-9_]+$/, 'Mã chứa chữ cái, số và dấu gạch dưới (_)'), 
+
+  deviceType: z.nativeEnum(DeviceType).refine((val) => Object.values(DeviceType).includes(val), {
+    message: "Vui lòng chọn loại thiết bị hợp lệ"
+}),
+  
   roomId: z.string().min(1, 'Vui lòng chọn phòng'),
   metadata: z.string().optional(),
 });
@@ -51,7 +50,7 @@ interface AddDeviceDialogProps {
 }
 
 const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({ 
-  rooms: propRooms = [], // [CHANGE] Đổi tên prop để tránh trùng, dùng làm fallback
+  rooms: propRooms = [], 
   homeId, 
   fixedRoomId, 
   fixedRoomName,
@@ -60,12 +59,10 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
   const [open, setOpen] = useState(false);
   const { createDevice, isLoading } = useDeviceStore();
 
-  // [CHANGE] Fetch danh sách phòng trực tiếp từ API
   const { data: fetchedRooms, isLoading: isLoadingRooms } = useRoomsByHome(homeId, {
-    enabled: open && !fixedRoomId, // Chỉ fetch khi dialog mở và không bị fix phòng
+    enabled: open && !fixedRoomId,
   });
 
-  // [CHANGE] Ưu tiên dữ liệu từ hook, nếu không có thì dùng props
   const roomsToDisplay = fetchedRooms && fetchedRooms.length > 0 ? fetchedRooms : propRooms;
   
   const form = useForm<z.infer<typeof formSchema>>({
@@ -92,15 +89,54 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
   }, [open, fixedRoomId, form]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    // Validate homeId
+    const validHomeId = Number(homeId);
+    if (!homeId || isNaN(validHomeId)) {
+      toast.error("Lỗi: Không tìm thấy ID Nhà hợp lệ");
+      return;
+    }
+
+    const payload = {
+      name: values.name,
+      deviceCode: values.deviceCode, // Zod đã đảm bảo format đúng
+      deviceType: values.deviceType,
+      metadata: values.metadata || "",
+      roomId: Number(values.roomId),
+      homeId: validHomeId,
+    };
+
+    console.log("📤 Payload:", payload);
+
     try {
-      await createDevice({
-        ...values,
-        roomId: parseInt(values.roomId),
-        homeId,
-      });
+      await createDevice(payload);
+      toast.success(`Đã thêm thiết bị "${values.name}" thành công!`);
       setOpen(false);
     } catch (error: any) {
-      console.error(error);
+      console.error("❌ Error:", error);
+      
+      const responseData = error.response?.data;
+      const message = String(responseData?.message || responseData || "Có lỗi xảy ra").toLowerCase();
+
+      // 1. Xử lý lỗi trùng mã (Backend trả về: Device code already exists)
+      if (message.includes("device code already exists") || message.includes("exists")) {
+        form.setError("deviceCode", { 
+          type: "manual", 
+          message: "Mã thiết bị này đã được sử dụng" 
+        });
+        form.setFocus("deviceCode");
+        return;
+      }
+      
+      // 2. Xử lý lỗi format (Nếu frontend lọt validation)
+      if (message.includes("device_code_pattern") || message.includes("format")) {
+         form.setError("deviceCode", { 
+          type: "manual", 
+          message: "Mã chứa ký tự không hợp lệ (chỉ được dùng chữ, số, _)" 
+        });
+        return;
+      }
+
+      toast.error(responseData?.message || "Thêm thiết bị thất bại");
     }
   };
 
@@ -117,11 +153,7 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Thêm thiết bị mới</DialogTitle>
-          <DialogDescription>
-            {fixedRoomName 
-              ? `Thêm thiết bị vào ${fixedRoomName}`
-              : "Nhập thông tin thiết bị mới vào nhà của bạn."}
-          </DialogDescription>
+          <DialogDescription>Nhập thông tin thiết bị.</DialogDescription>
         </DialogHeader>
         
         <Form {...form}>
@@ -132,10 +164,8 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Tên thiết bị *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ví dụ: Đèn trần" {...field} />
-                      </FormControl>
+                      <FormLabel>Tên thiết bị <span className="text-red-500">*</span></FormLabel>
+                      <FormControl><Input placeholder="Ví dụ: Đèn phòng khách" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -146,9 +176,14 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
                   name="deviceCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Mã thiết bị (Code) *</FormLabel>
+                      <FormLabel>Mã thiết bị <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="LIGHT_001" {...field} />
+                        <Input 
+                          placeholder="LIGHT_01" 
+                          {...field} 
+                          // Tự động viết hoa (nhưng vẫn phải validate ký tự đặc biệt)
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())} 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -162,18 +197,12 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
                   name="deviceType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Loại thiết bị *</FormLabel>
+                      <FormLabel>Loại thiết bị <span className="text-red-500">*</span></FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn loại" />
-                          </SelectTrigger>
-                        </FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Chọn loại" /></SelectTrigger></FormControl>
                         <SelectContent>
                           {Object.values(DeviceType).map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -187,24 +216,19 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
                   name="roomId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phòng *</FormLabel>
+                      <FormLabel>Phòng <span className="text-red-500">*</span></FormLabel>
                       {fixedRoomId ? (
-                         <FormControl>
-                            <Input value={fixedRoomName} disabled className="bg-muted" />
-                         </FormControl>
+                         <FormControl><Input value={fixedRoomName} disabled className="bg-muted" /></FormControl>
                       ) : (
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder={isLoadingRooms ? "Đang tải phòng..." : "Chọn phòng"} />
+                                <SelectValue placeholder={isLoadingRooms ? "Đang tải..." : "Chọn phòng"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {/* [CHANGE] Sử dụng roomsToDisplay thay vì rooms prop cũ */}
                               {roomsToDisplay.map((room) => (
-                                <SelectItem key={room.id} value={room.id.toString()}>
-                                  {room.name}
-                                </SelectItem>
+                                <SelectItem key={room.id} value={room.id.toString()}>{room.name}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -220,31 +244,18 @@ const AddDeviceDialog: React.FC<AddDeviceDialogProps> = ({
               name="metadata"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Thông tin thêm (Metadata)</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Ghi chú thêm về thiết bị..."
-                      className="resize-none h-20"
-                      {...field} 
-                    />
-                  </FormControl>
+                  <FormLabel>Ghi chú thêm</FormLabel>
+                  <FormControl><Textarea placeholder="Vị trí lắp đặt..." className="resize-none h-20" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-                disabled={isLoading}
-              >
-                Hủy
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Hủy bỏ</Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? 'Đang tạo...' : 'Tạo thiết bị'}
+                {isLoading ? 'Đang lưu...' : 'Tạo thiết bị'}
               </Button>
             </DialogFooter>
           </form>

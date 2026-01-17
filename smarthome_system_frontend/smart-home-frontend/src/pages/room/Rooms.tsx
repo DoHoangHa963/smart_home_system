@@ -7,12 +7,12 @@ import { Loader2, DoorOpen, Grid3X3, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRoomsByHome } from '@/hooks/useRoom';
+import { useDeviceDetection } from '@/hooks/useDeviceDetection';
 
 export default function Rooms() {
   const { currentHome } = useHomeStore();
-  
-  // 1. STATE QUẢN LÝ: Chỉ lưu ID của phòng đang mở (null = đóng hết)
   const [expandedRoomId, setExpandedRoomId] = useState<number | null>(null);
+  const { isMobile, isTablet, type } = useDeviceDetection();
 
   const { 
     data: rooms = [], 
@@ -22,7 +22,6 @@ export default function Rooms() {
     enabled: !!currentHome?.id,
   });
 
-  // Reset trạng thái mở khi đổi nhà hoặc load lại trang
   useEffect(() => {
     if (currentHome?.id) {
       refetch();
@@ -30,76 +29,118 @@ export default function Rooms() {
     }
   }, [currentHome?.id, refetch]);
 
-  // 2. HÀM XỬ LÝ CLICK: Logic đóng/mở thông minh
   const handleToggleRoom = (roomId: number) => {
-    setExpandedRoomId((prevId) => {
-      // Nếu bấm vào phòng đang mở -> Đóng lại (về null)
-      if (prevId === roomId) return null;
-      // Nếu bấm vào phòng khác -> Mở phòng đó (lưu ID mới)
-      return roomId;
-    });
+    setExpandedRoomId((prevId) => prevId === roomId ? null : roomId);
+  };
+
+  // Responsive grid classes
+  const getGridClasses = () => {
+    if (isMobile) return 'grid-cols-1';
+    if (isTablet) return 'grid-cols-2 lg:grid-cols-3';
+    return 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
   };
 
   return (
-    <div className="space-y-6 pb-10 px-4 md:px-6">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Grid3X3 className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Quản lý Phòng</h1>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <p className="text-sm text-muted-foreground">
-              Danh sách các phòng trong nhà
-            </p>
-            <Badge variant="outline" className="w-fit">
-              {currentHome?.name || 'Chưa chọn nhà'}
-            </Badge>
-            {rooms.length > 0 && (
-              <Badge variant="secondary" className="w-fit">
-                {rooms.length} phòng
+    <div className={`space-y-6 pb-10 ${isMobile ? 'px-3' : 'px-4 md:px-6'}`}>
+      {/* HEADER - Responsive */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Grid3X3 className={`text-primary flex-shrink-0 ${
+                isMobile ? 'h-5 w-5' : 'h-6 w-6'
+              }`} />
+              <h1 className={`font-bold tracking-tight truncate ${
+                isMobile ? 'text-xl' : 'text-2xl md:text-3xl'
+              }`}>
+                Quản lý Phòng
+              </h1>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <p className={`text-muted-foreground ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                Danh sách các phòng trong nhà
+              </p>
+              <Badge variant="outline" className={`w-fit ${
+                isMobile ? 'text-xs' : ''
+              }`}>
+                {currentHome?.name || 'Chưa chọn nhà'}
               </Badge>
-            )}
+              {rooms.length > 0 && (
+                <Badge variant="secondary" className={`w-fit ${
+                  isMobile ? 'text-xs' : ''
+                }`}>
+                  {rooms.length} phòng
+                </Badge>
+              )}
+            </div>
           </div>
+          
+          {!isMobile && <CreateRoomModal />}
         </div>
-        
-        <CreateRoomModal />
+
+        {isMobile && (
+          <div className="flex gap-2">
+            <CreateRoomModal />
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+        )}
       </div>
 
       <Separator />
 
-      {/* CONTENT */}
+      {/* CONTENT - Responsive Grid */}
       {isLoading ? (
         <div className="flex h-40 items-center justify-center rounded-lg border">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Đang tải danh sách phòng...</p>
+            <Loader2 className={`animate-spin text-primary mx-auto mb-2 ${
+              isMobile ? 'h-6 w-6' : 'h-8 w-8'
+            }`} />
+            <p className={`text-muted-foreground ${isMobile ? 'text-xs' : 'text-sm'}`}>
+              Đang tải danh sách phòng...
+            </p>
           </div>
         </div>
       ) : (
         <>
           {rooms.length > 0 ? (
-            // Thêm items-start để các card không bị kéo dãn chiều cao theo card đang mở
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 items-start">
+            <div className={`grid ${getGridClasses()} ${
+              isMobile ? 'gap-3' : 'gap-4 md:gap-6'
+            } items-start`}>
               {rooms.map((room) => (
                 <RoomCard 
                   key={room.id} 
                   room={room} 
-                  // 3. TRUYỀN PROPS XUỐNG ROOMCARD
-                  isExpanded={expandedRoomId === room.id} // Chỉ true nếu ID trùng khớp
-                  onToggle={() => handleToggleRoom(room.id)} // Truyền hàm xử lý
+                  isExpanded={expandedRoomId === room.id}
+                  onToggle={() => handleToggleRoom(room.id)}
                 />
               ))}
             </div>
           ) : (
-            // Empty State
-            <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-lg bg-muted/20">
-              <div className="bg-primary/10 p-4 rounded-full mb-4">
-                <DoorOpen className="h-12 w-12 text-primary" />
+            <div className={`flex flex-col items-center justify-center text-center border-2 border-dashed rounded-lg bg-muted/20 ${
+              isMobile ? 'py-12 px-4' : 'py-16'
+            }`}>
+              <div className={`bg-primary/10 rounded-full mb-4 ${
+                isMobile ? 'p-3' : 'p-4'
+              }`}>
+                <DoorOpen className={`text-primary ${
+                  isMobile ? 'h-8 w-8' : 'h-12 w-12'
+                }`} />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Chưa có phòng nào</h3>
-              <p className="text-muted-foreground max-w-md mb-6">
+              <h3 className={`font-semibold mb-2 ${
+                isMobile ? 'text-lg' : 'text-xl'
+              }`}>
+                Chưa có phòng nào
+              </h3>
+              <p className={`text-muted-foreground max-w-md mb-6 ${
+                isMobile ? 'text-sm px-4' : ''
+              }`}>
                 Hãy tạo các phòng để quản lý thiết bị dễ dàng hơn.
               </p>
               <div className="space-y-3">
