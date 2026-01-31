@@ -56,6 +56,7 @@ public enum ErrorCode {
     HOME_NOT_FOUND(4020, "Home not found", HttpStatus.NOT_FOUND),
     ROOM_NOT_FOUND(4021, "Room not found", HttpStatus.NOT_FOUND),
     HOME_MEMBER_NOT_FOUND(4022, "Home member not found", HttpStatus.NOT_FOUND),
+    HOME_HAS_NO_MEMBERS(4023, "Home has no members", HttpStatus.BAD_REQUEST),
     HOME_LIMIT_REACHED(1010, "Bạn đã đạt giới hạn số lượng nhà cho phép (Tối đa 3 nhà)", HttpStatus.BAD_REQUEST),
 
     // Scene not found
@@ -65,6 +66,16 @@ public enum ErrorCode {
     // Automation not found
     AUTOMATION_NOT_FOUND(4040, "Automation rule not found", HttpStatus.NOT_FOUND),
     AUTOMATION_CONDITION_NOT_FOUND(4041, "Automation condition not found", HttpStatus.NOT_FOUND),
+
+    // MCU Gateway not found
+    MCU_NOT_FOUND(4045, "MCU Gateway not found", HttpStatus.NOT_FOUND),
+    MCU_ALREADY_PAIRED(4046, "Home already has a paired MCU Gateway", HttpStatus.CONFLICT),
+    MCU_SERIAL_EXISTS(4047, "Serial number already exists", HttpStatus.CONFLICT),
+    MCU_INVALID_API_KEY(2012, "Invalid MCU API Key", HttpStatus.UNAUTHORIZED),
+    MCU_NOT_IN_PAIRING_STATE(1011, "MCU is not in pairing state", HttpStatus.BAD_REQUEST),
+    MCU_OFFLINE(6009, "MCU Gateway is offline", HttpStatus.SERVICE_UNAVAILABLE),
+    MCU_CONNECTION_FAILED(6010, "Failed to connect to MCU Gateway", HttpStatus.BAD_GATEWAY),
+    INVALID_API_KEY(2013, "Invalid API Key", HttpStatus.UNAUTHORIZED),
 
     // Schedule not found
     SCHEDULE_NOT_FOUND(4050, "Schedule not found", HttpStatus.NOT_FOUND),
@@ -94,7 +105,7 @@ public enum ErrorCode {
 
     // Device conflicts
     DEVICE_ALREADY_EXISTS(5010, "Device already registered", HttpStatus.CONFLICT),
-    DUPLICATE_DEVICE_NAME(5011, "Device name already exists in this home", HttpStatus.CONFLICT),
+    GPIO_PIN_ALREADY_IN_USE(5011, "GPIO pin is already assigned to another device", HttpStatus.CONFLICT),
     DEVICE_ALREADY_PAIRED(5012, "Device is already paired with another account", HttpStatus.CONFLICT),
     DEVICE_MAC_ADDRESS_EXISTS(5013, "Device with this MAC address already exists", HttpStatus.CONFLICT),
     DEVICE_SERIAL_EXISTS(5014, "Device with this serial number already exists", HttpStatus.CONFLICT),
@@ -150,6 +161,9 @@ public enum ErrorCode {
     DEVICE_MALFUNCTION(6007, "Device malfunction detected", HttpStatus.INTERNAL_SERVER_ERROR),
     DEVICE_BATTERY_LOW(6008, "Device battery is critically low", HttpStatus.UNPROCESSABLE_ENTITY),
 
+    // MCU Gateway errors (continued from Device errors section)
+    // MCU_OFFLINE already defined above
+
     // 7xxx - External Service Errors
     EXTERNAL_SERVICE_ERROR(7000, "External service error", HttpStatus.BAD_GATEWAY),
     MQTT_CONNECTION_ERROR(7001, "MQTT broker connection failed", HttpStatus.SERVICE_UNAVAILABLE),
@@ -183,7 +197,9 @@ public enum ErrorCode {
     UNSUPPORTED_FILE_TYPE(9010, "Unsupported file type", HttpStatus.UNSUPPORTED_MEDIA_TYPE),
     ENCRYPTION_ERROR(9011, "Data encryption/decryption failed", HttpStatus.INTERNAL_SERVER_ERROR),
     CACHE_ERROR(9012, "Cache service error", HttpStatus.INTERNAL_SERVER_ERROR),
-    CLASS_CAST_ERROR(9013, "Type conversion error", HttpStatus.INTERNAL_SERVER_ERROR);
+    CLASS_CAST_ERROR(9013, "Type conversion error", HttpStatus.INTERNAL_SERVER_ERROR),
+    INTERNAL_SERVER_ERROR(9014, "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
+    RESOURCE_NOT_FOUND(9015, "RESOURCE_NOT_FOUND", HttpStatus.INTERNAL_SERVER_ERROR);
 
     ErrorCode(int code, String message, HttpStatus status) {
         this.code = code;

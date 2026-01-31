@@ -171,4 +171,27 @@ public class PermissionUtils {
 
         return hierarchy.getOrDefault(userRole, 0) >= hierarchy.getOrDefault(requiredRole, 0);
     }
+
+    /**
+     * Lấy permissions JSON string mặc định theo role
+     */
+    public static String getDefaultPermissionsJsonByRole(HomeMemberRole role) {
+        Set<HomePermission> permissions = getDefaultPermissionsByRole(role);
+        return toPermissionsJsonFromEnum(permissions);
+    }
+
+    /**
+     * Lấy permissions dạng Set<String> theo role
+     */
+    public static Set<String> getDefaultPermissionNamesByRole(HomeMemberRole role) {
+        Set<HomePermission> permissions = getDefaultPermissionsByRole(role);
+        return permissions.stream()
+                .map(Enum::name)
+                .collect(Collectors.toSet());
+    }
+
+    public static List<String> mergePermissionsAsList(HomeMemberRole role, String customPermissionsJson) {
+        Set<String> permissions = mergePermissions(role, customPermissionsJson);
+        return new ArrayList<>(permissions);
+    }
 }

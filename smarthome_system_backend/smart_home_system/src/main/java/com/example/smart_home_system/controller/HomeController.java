@@ -4,6 +4,7 @@ import com.example.smart_home_system.constant.RequestApi;
 import com.example.smart_home_system.dto.request.HomeRequest;
 import com.example.smart_home_system.dto.response.ApiResponse;
 import com.example.smart_home_system.dto.response.HomeResponse;
+import com.example.smart_home_system.dto.response.admin.RecentActivityResponse;
 import com.example.smart_home_system.service.HomeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -21,6 +22,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -182,5 +185,23 @@ public class HomeController {
         log.info("User leaving home: {}", homeId);
         homeService.leaveHome(homeId);
         return ResponseEntity.ok(ApiResponse.success("Successfully left the home"));
+    }
+
+    // ==================== RECENT ACTIVITIES ====================
+    @Operation(summary = "Get recent activities", description = "Get recent activity logs for a home")
+    @GetMapping(
+            value = "/{homeId}/recent-activities",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    @PreAuthorize("hasRole('ADMIN') or hasPermission(#homeId, 'HOME', 'HOME_LOGS_VIEW')")
+    public ResponseEntity<ApiResponse<List<RecentActivityResponse>>> getRecentActivities(
+            @Parameter(description = "Home ID", required = true, example = "1")
+            @PathVariable("homeId") Long homeId,
+            @Parameter(description = "Number of activities to retrieve", example = "10")
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        log.debug("Getting recent activities for home: {}, limit: {}", homeId, limit);
+        List<RecentActivityResponse> activities = homeService.getRecentActivities(homeId, limit);
+        return ResponseEntity.ok(ApiResponse.success("Recent activities retrieved successfully", activities));
     }
 }

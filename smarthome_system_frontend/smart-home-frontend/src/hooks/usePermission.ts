@@ -14,6 +14,7 @@ import {
   type Permission,
   type SystemPermission,
   type HomePermission,
+  HOME_PERMISSIONS, // Đảm bảo bạn import enum này để map quyền cứng
 } from '@/types/permission';
 
 export const usePermission = () => {
@@ -41,30 +42,48 @@ export const usePermission = () => {
   const homePermissions = useMemo<HomePermission[]>(() => {
     if (!homeRole) return [];
 
-    // Parse custom permissions from JSON
+    // 1. Lấy quyền tùy chỉnh từ DB (JSON)
     const customPermissions = parsePermissions(currentMember?.permissions);
 
-    // Get default role permissions
+    // 2. Lấy quyền mặc định theo Role (định nghĩa trong frontend/types/permission.ts)
+    // Đây là chốt chặn quan trọng: ADMIN phải luôn có quyền mặc định kể cả khi DB rỗng
     const rolePermissions = getHomeRolePermissions(homeRole);
 
-    // Merge and deduplicate
+    // 3. Merge và loại bỏ trùng lặp
     return Array.from(new Set([...rolePermissions, ...customPermissions])) as HomePermission[];
   }, [homeRole, currentMember?.permissions]);
 
   // ============================================
-  // PERMISSION CHECKERS
+  // PERMISSION CHECKERS (LOGIC QUAN TRỌNG ĐÃ SỬA)
   // ============================================
 
   /**
    * Check if user has system or home permission(s)
    */
   const can = (permission: Permission | Permission[]): boolean => {
-    // If admin, has all system permissions
+    // 1. System Admin luôn có quyền (God mode hệ thống)
     if (isAdmin) {
       return true;
     }
 
-    // Otherwise check home permissions
+    // 2. Home Owner luôn có quyền (God mode trong nhà)
+    // Sửa lỗi triệt để: Không cần check list permission nếu là Owner
+    if (homeRole === HomeRole.OWNER) {
+      return true;
+    }
+
+    // 3. Home Admin xử lý đặc biệt (Tùy chọn)
+    // Nếu bạn muốn Admin luôn xem được thành viên mà không cần check list
+    // (Bỏ qua đoạn này nếu bạn muốn Admin bị giới hạn chặt chẽ theo list)
+    if (homeRole === HomeRole.ADMIN) {
+        // Ví dụ: Admin luôn có quyền VIEW cơ bản
+        if (permission === HOME_PERMISSIONS.MEMBER_VIEW || 
+            permission === HOME_PERMISSIONS.DEVICE_VIEW) {
+            return true;
+        }
+    }
+
+    // 4. Kiểm tra danh sách permission cụ thể
     return hasPermission(homePermissions, permission);
   };
 
@@ -73,6 +92,8 @@ export const usePermission = () => {
    */
   const canAny = (permissions: Permission[]): boolean => {
     if (isAdmin) return true;
+    if (homeRole === HomeRole.OWNER) return true; // Owner bypass
+
     return hasAnyPermission(homePermissions, permissions);
   };
 

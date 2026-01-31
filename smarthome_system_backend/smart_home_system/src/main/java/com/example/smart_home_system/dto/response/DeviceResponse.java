@@ -24,6 +24,13 @@ public class DeviceResponse {
     private String metadata;
     private Long roomId;
     private String roomName;
+    
+    /**
+     * GPIO pin number trên ESP32 tương ứng với device này
+     * Được tự động map từ deviceCode sử dụng GPIOMapping
+     * null nếu device không có GPIO mapping
+     */
+    private Integer gpioPin;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;

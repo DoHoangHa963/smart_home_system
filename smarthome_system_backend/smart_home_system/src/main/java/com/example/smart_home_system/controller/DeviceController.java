@@ -242,7 +242,7 @@ public class DeviceController {
             )
     })
     @DeleteMapping(RequestApi.DEVICE_DELETE)
-    @PreAuthorize("hasRole('ADMIN') or @deviceService.isDeviceOwner(#deviceId)")
+    @PreAuthorize("hasRole('ADMIN') or @deviceService.isDeviceOwner(#deviceId) or hasPermission(#deviceId, 'DEVICE', 'DEVICE_DELETE')")
     public ResponseEntity<ApiResponse<Void>> deleteDevice(@PathVariable Long deviceId) {
         deviceService.deleteDevice(deviceId);
         return ResponseEntity.ok(ApiResponse.success("Device deleted", null));

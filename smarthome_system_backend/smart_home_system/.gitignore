@@ -35,3 +35,22 @@ build/
 
 ### VS Code ###
 .vscode/
+# Env
+.env
+.env.*
+!.env.example
+
+# Docker / CI
+*.yml
+*.yaml
+
+# Laravel
+/storage/*.key
+/storage/*.log
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
