@@ -91,7 +91,7 @@ public class RequestApi {
     public static final String DEVICE = API_VERSION + "/devices";
     public static final String DEVICE_CREATE = "";
     public static final String DEVICE_GET_BY_ID = "/{deviceId}";
-    public static final String DEVICE_GET_BY_CODE = "/{deviceCode}";
+    public static final String DEVICE_GET_BY_CODE = "/code/{deviceCode}";
     public static final String DEVICE_UPDATE = "/{deviceId}";
     public static final String DEVICE_DELETE = "/{deviceId}";
     public static final String DEVICE_LIST = "";
@@ -222,6 +222,16 @@ public class RequestApi {
     public static final String LOGS_USER = "/user/{userId}";
     public static final String LOGS_AUTOMATION = "/automation/{automationId}";
     public static final String LOGS_EXPORT = "/export";
+
+    // ==================== MCU GATEWAY ====================
+    public static final String MCU_GATEWAY = API_VERSION + "/mcu";
+    public static final String MCU_INIT_PAIRING = "/init-pairing";
+    public static final String MCU_PAIR = "/pair/{homeId}";
+    public static final String MCU_CONFIRM = "/confirm/{mcuGatewayId}/home/{homeId}";
+    public static final String MCU_HEARTBEAT = "/heartbeat";
+    public static final String MCU_GET_BY_HOME = "/home/{homeId}";
+    public static final String MCU_UNPAIR = "/{mcuGatewayId}";
+    public static final String MCU_SEND_API_KEY = "/send-api-key";
 
     // ==================== ADMIN ====================
     public static final String ADMIN = API_VERSION + "/admin";

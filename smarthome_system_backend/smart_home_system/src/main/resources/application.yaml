@@ -13,14 +13,38 @@ spring:
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # Connection pool configuration - Tăng pool size để xử lý nhiều request đồng thời
+      maximum-pool-size: 50  # Tăng lên 50 để xử lý nhiều request đồng thời (polling + SSE)
+      minimum-idle: 10  # Tăng minimum idle để có sẵn connections
+      connection-timeout: 30000  # 30s timeout
+      idle-timeout: 300000  # 5 phút - đóng connections không sử dụng
+      max-lifetime: 1800000  # 30 phút - thời gian tối đa một connection có thể sống
+      leak-detection-threshold: 60000  # 60s để phát hiện leak
+      connection-test-query: SELECT 1  # Test query để đảm bảo connection còn hoạt động
+      pool-name: SmartHomeHikariPool
+      # Tăng registerMbeans để monitor pool
+      register-mbeans: true
+      # Tối ưu cho MySQL
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         dialect: org.hibernate.dialect.MySQL8Dialect
 
   jackson:
@@ -36,8 +60,23 @@ spring:
 
 logging:
   level:
-    org.springframework.security: DEBUG
-    com.example.smart_home_system.configuration: DEBUG
+    org.springframework.security: WARN  # Giảm từ DEBUG xuống WARN để giảm log
+    org.springframework.security.web.FilterChainProxy: WARN  # Giảm log filter chain
+    org.springframework.security.web.access: WARN  # Giảm log authorization
+    org.springframework.security.web.authentication: WARN  # Giảm log authentication
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: WARN  # Chỉ log WARN và ERROR
+    com.zaxxer.hikari.pool.ProxyLeakTask: WARN  # Connection leak warnings
+    com.example.smart_home_system.configuration: INFO  # Giảm từ DEBUG xuống INFO
+    com.example.smart_home_system.service: INFO  # Service layer logs
+    com.example.smart_home_system.controller: INFO  # Controller logs
+    com.example.smart_home_system.service.implement.MqttMessageHandler: INFO  # MQTT handler logs
+    com.example.smart_home_system.config.MqttConfig: INFO  # MQTT config logs
+    org.springframework.integration.mqtt: INFO  # Spring Integration MQTT logs
+    org.eclipse.paho.client.mqttv3: WARN  # MQTT client logs (reduce noise)
+    org.hibernate.SQL: OFF
+    org.hibernate.orm.jdbc.bind: OFF   # Hibernate 6
+    org.hibernate.type.descriptor.sql: OFF  # Hibernate 5
+    root: INFO
 
 file:
   upload-dir: uploads
@@ -45,11 +84,16 @@ file:
   allowed-extensions: jpg,jpeg,png,gif
 
 mqtt:
-  broker-url: tcp://localhost:1883
-  client-id: smarthome-test-client
-  username: mqtt_user  # Nếu có auth
-  password: mqtt_pass
-  default-topic: smarthome/1/ESP32-LIVINGROOM-LIGHT
+  broker-url: tcp://192.168.0.198:1883
+  client-id: smarthome-backend
+  username: ""  # Leave empty for no auth
+  password: ""
+  default-qos: 1
+  # Topic structure:
+  # - smarthome/{homeId}/commands - Backend publishes commands to ESP32
+  # - smarthome/{homeId}/sensors - ESP32 publishes sensor data
+  # - smarthome/{homeId}/rfid/# - RFID events
+  # - smarthome/{homeId}/status - Device online/offline status
 
 jwt:
   expiration: 36000 #in seconds

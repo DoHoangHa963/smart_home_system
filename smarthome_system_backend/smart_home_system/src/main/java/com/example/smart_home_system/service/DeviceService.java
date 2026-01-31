@@ -13,6 +13,45 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Service interface for managing IoT Device entities in the Smart Home System.
+ * 
+ * <p>This service provides comprehensive device management operations including:
+ * <ul>
+ *   <li>Device registration and configuration</li>
+ *   <li>Device status monitoring and updates</li>
+ *   <li>Command sending to devices</li>
+ *   <li>Device state management</li>
+ *   <li>Device statistics and analytics</li>
+ * </ul>
+ * 
+ * <p><b>Device Lifecycle:</b>
+ * <ol>
+ *   <li>Device is created with OFFLINE status</li>
+ *   <li>Device connects and status changes to ONLINE</li>
+ *   <li>Device receives commands and updates state</li>
+ *   <li>Device can be soft-deleted (archived)</li>
+ * </ol>
+ * 
+ * <p><b>Supported Device Types:</b>
+ * <ul>
+ *   <li>LIGHT - Smart lighting devices</li>
+ *   <li>THERMOSTAT - Temperature control devices</li>
+ *   <li>SENSOR - Various sensors (motion, temperature, humidity)</li>
+ *   <li>SWITCH - Smart switches and outlets</li>
+ *   <li>CAMERA - Security cameras</li>
+ * </ul>
+ * 
+ * <p><b>Command Protocol:</b>
+ * Devices communicate via command-payload pattern where commands include
+ * TURN_ON, TURN_OFF, TOGGLE, SET_VALUE, etc.
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see DeviceServiceImpl
+ * @see RoomService
+ */
 public interface DeviceService {
     DeviceResponse createDevice(DeviceCreateRequest request);
     DeviceResponse getDeviceById(Long id);

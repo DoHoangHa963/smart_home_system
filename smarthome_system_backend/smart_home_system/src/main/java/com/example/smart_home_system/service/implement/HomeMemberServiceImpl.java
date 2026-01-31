@@ -7,12 +7,15 @@ import com.example.smart_home_system.entity.HomeMember;
 import com.example.smart_home_system.entity.User;
 import com.example.smart_home_system.enums.HomeMemberRole;
 import com.example.smart_home_system.enums.HomeMemberStatus;
+import com.example.smart_home_system.enums.HomePermission;
 import com.example.smart_home_system.exception.*;
 import com.example.smart_home_system.mapper.HomeMemberMapper;
 import com.example.smart_home_system.repository.HomeMemberRepository;
 import com.example.smart_home_system.repository.HomeRepository;
 import com.example.smart_home_system.repository.UserRepository;
+import com.example.smart_home_system.service.EventLogService;
 import com.example.smart_home_system.service.HomeMemberService;
+import com.example.smart_home_system.util.PermissionUtils;
 import com.example.smart_home_system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +27,45 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Implementation of {@link HomeMemberService} for managing home membership.
+ * 
+ * <p>This service provides the core business logic for member management including:
+ * <ul>
+ *   <li>Adding members with role and permission assignment</li>
+ *   <li>Removing members with privilege validation</li>
+ *   <li>Updating member roles with default permissions</li>
+ *   <li>Ownership transfer between members</li>
+ * </ul>
+ * 
+ * <p><b>Permission Model:</b>
+ * The service uses a hybrid permission model:
+ * <ul>
+ *   <li><b>Role-based:</b> OWNER, ADMIN, MEMBER, GUEST have default permissions</li>
+ *   <li><b>Custom:</b> Individual permissions can be added/removed per member</li>
+ * </ul>
+ * 
+ * <p><b>Member Operations Rules:</b>
+ * <ul>
+ *   <li>OWNER can perform all operations</li>
+ *   <li>ADMIN can add/remove MEMBER and GUEST</li>
+ *   <li>ADMIN cannot remove other ADMINs</li>
+ *   <li>Nobody can remove the OWNER</li>
+ *   <li>OWNER cannot leave without transferring ownership</li>
+ * </ul>
+ * 
+ * <p><b>Ownership Transfer:</b>
+ * Uses SERIALIZABLE isolation level to prevent race conditions
+ * when transferring ownership.
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see HomeMemberService
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -36,6 +76,8 @@ public class HomeMemberServiceImpl implements HomeMemberService {
     private final HomeRepository homeRepository;
     private final UserRepository userRepository;
     private final HomeMemberMapper homeMemberMapper;
+    private final PermissionServiceImpl permissionService;
+    private final EventLogService eventLogService;
 
     @Override
     @Transactional
@@ -45,35 +87,56 @@ public class HomeMemberServiceImpl implements HomeMemberService {
         // 1. Lấy người mời
         HomeMember requester = getMemberOrThrow(homeId, currentUsername);
 
-        // 2. CHECK QUYỀN MỀM (Flexible Permission) thay vì Role cứng
-        if (!requester.hasPermission("MEMBER_INVITE")) {
-            // Fallback: Nếu không có quyền mềm, check Role cứng (tương thích ngược)
-            validatePrivilege(requester, HomeMemberRole.ADMIN);
+        // 2. CHECK QUYỀN: OWNER luôn có quyền, sau đó check permission hoặc ADMIN role
+        HomeMemberRole requesterRole = requester.getRole();
+        if (requesterRole != HomeMemberRole.OWNER) {
+            // Nếu không phải OWNER, check permission hoặc ADMIN role
+            if (!requester.hasPermission("MEMBER_INVITE")) {
+                // Fallback: Nếu không có quyền mềm, check Role cứng (tương thích ngược)
+                validatePrivilege(requester, HomeMemberRole.ADMIN);
+            }
         }
+        // OWNER luôn có quyền, không cần check thêm
 
         // 3. Tìm user
         User targetUser = userRepository.findByUsername(request.getIdentifier())
                 .or(() -> userRepository.findByEmail(request.getIdentifier()))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        HomeMemberRole role = request.getRole() != null ?
+                request.getRole() : HomeMemberRole.MEMBER;
+
+        Set<HomePermission> defaultPermissions = PermissionUtils.getDefaultPermissionsByRole(role);
+        String permissionsJson = PermissionUtils.toPermissionsJsonFromEnum(defaultPermissions);
+
         // 4. Validate Duplicate
         if (homeMemberRepository.existsByHomeIdAndUserId(homeId, targetUser.getId())) {
             throw new DuplicateResourceException("User is already a member of this home");
         }
 
+        HomeMemberRole roleGetFromRequest = request.getRole() != null ?
+                request.getRole() : HomeMemberRole.MEMBER;
+
         // 5. Build Member mới
         HomeMember newMember = HomeMember.builder()
                 .home(requester.getHome())
                 .user(targetUser)
-                .role(HomeMemberRole.MEMBER)
+                .role(roleGetFromRequest)
                 .status(HomeMemberStatus.ACTIVE.name())
                 .invitedBy(currentUsername)
                 .invitedAt(LocalDateTime.now())
-                .permissions("[]") // <--- QUAN TRỌNG: Khởi tạo permissions rỗng để tránh NULL
+                .permissions(permissionsJson) // <--- QUAN TRỌNG: Khởi tạo permissions rỗng để tránh NULL
                 .joinedAt(LocalDateTime.now())
                 .build();
 
-        return homeMemberMapper.toResponse(homeMemberRepository.save(newMember));
+        HomeMember savedMember = homeMemberRepository.save(newMember);
+        
+        // Ghi log thêm member
+        String eventValue = String.format("{\"role\":\"%s\",\"username\":\"%s\"}",
+                savedMember.getRole().name(), targetUser.getUsername());
+        eventLogService.logMemberEvent(homeId, targetUser.getId(), "MEMBER_ADD", eventValue, "WEB");
+
+        return homeMemberMapper.toResponse(savedMember);
     }
 
     @Override
@@ -105,6 +168,11 @@ public class HomeMemberServiceImpl implements HomeMemberService {
             throw new UnauthorizedException(ErrorCode.INSUFFICIENT_PERMISSIONS);
         }
 
+        // Ghi log trước khi xóa
+        String eventValue = String.format("{\"role\":\"%s\",\"username\":\"%s\"}",
+                targetMember.getRole().name(), targetMember.getUser().getUsername());
+        eventLogService.logMemberEvent(homeId, targetUserId, "MEMBER_REMOVE", eventValue, "WEB");
+        
         // 3. Xóa (Soft Delete hoặc Hard Delete tùy cấu hình BaseEntity)
         homeMemberRepository.delete(targetMember);
     }
@@ -114,23 +182,54 @@ public class HomeMemberServiceImpl implements HomeMemberService {
     public HomeMemberResponse updateMemberRole(Long homeId, String targetUserId, UpdateRoleRequest request) {
         String currentUsername = SecurityUtils.getCurrentUsername();
 
+        // 1. Lấy người thực hiện
         HomeMember requester = getMemberOrThrow(homeId, currentUsername);
+
+        // 2. CHECK QUYỀN MỀM (Flexible Permission) thay vì Role cứng
+        if (!requester.hasPermission("MEMBER_UPDATE")) {
+            // Fallback: Nếu không có quyền mềm, check Role cứng
+            // Chỉ OWNER mới được update role của người khác
+            validatePrivilege(requester, HomeMemberRole.OWNER);
+        }
+
+        // 3. Tìm member cần update
         HomeMember targetMember = homeMemberRepository.findByHomeIdAndUserId(homeId, targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
 
-        // Chỉ OWNER mới được thăng cấp/giáng cấp người khác thành ADMIN/MEMBER
-        // ADMIN chỉ được quản lý GUEST/MEMBER (tùy nghiệp vụ, ở đây set cứng chỉ OWNER được chỉnh role)
-        if (requester.getRole() != HomeMemberRole.OWNER) {
-            throw new UnauthorizedException(ErrorCode.INSUFFICIENT_PERMISSIONS);
-        }
-
-        // Không được đổi role của chính mình (chuyển quyền Owner là API khác)
+        // 4. Validate: Không được update role của chính mình
         if (requester.getId().equals(targetMember.getId())) {
-            throw new AppException(ErrorCode.BAD_REQUEST);
+            throw new AppException(ErrorCode.BAD_REQUEST, "Không thể thay đổi vai trò của chính mình");
         }
 
-        targetMember.setRole(request.getNewRole());
-        return homeMemberMapper.toResponse(homeMemberRepository.save(targetMember));
+        // 5. Validate: Không được hạ cấp/chuyển role của OWNER trừ khi là API transferOwnership
+        if (targetMember.getRole() == HomeMemberRole.OWNER) {
+            throw new AppException(ErrorCode.BAD_REQUEST,
+                    "Không thể thay đổi role của Owner. Vui lòng sử dụng API chuyển quyền sở hữu.");
+        }
+
+        // 6. Lấy role mới từ request
+        HomeMemberRole newRole = request.getNewRole() != null ?
+                request.getNewRole() : HomeMemberRole.MEMBER;
+
+        // 7. Lấy default permissions cho role mới và convert sang JSON
+        Set<HomePermission> defaultPermissions = PermissionUtils.getDefaultPermissionsByRole(newRole);
+        String permissionsJson = PermissionUtils.toPermissionsJsonFromEnum(defaultPermissions);
+
+        // 8. Cập nhật thông tin
+        HomeMemberRole oldRole = targetMember.getRole();
+        targetMember.setRole(newRole);
+        targetMember.setPermissions(permissionsJson);
+        targetMember.setUpdatedAt(LocalDateTime.now());
+
+        // 9. Save và trả về response
+        HomeMember updatedMember = homeMemberRepository.save(targetMember);
+        
+        // Ghi log cập nhật role
+        String eventValue = String.format("{\"oldRole\":\"%s\",\"newRole\":\"%s\",\"username\":\"%s\"}",
+                oldRole.name(), newRole.name(), updatedMember.getUser().getUsername());
+        eventLogService.logMemberEvent(homeId, targetUserId, "MEMBER_UPDATE_ROLE", eventValue, "WEB");
+        
+        return homeMemberMapper.toResponse(updatedMember);
     }
 
     @Override
@@ -161,6 +260,11 @@ public class HomeMemberServiceImpl implements HomeMemberService {
         if (member.getRole() == HomeMemberRole.OWNER) {
             throw new AppException(ErrorCode.BAD_REQUEST);
         }
+
+        // Ghi log rời nhà
+        String eventValue = String.format("{\"role\":\"%s\",\"username\":\"%s\"}",
+                member.getRole().name(), member.getUser().getUsername());
+        eventLogService.logMemberEvent(homeId, member.getUser().getId(), "MEMBER_LEAVE", eventValue, "WEB");
 
         homeMemberRepository.delete(member);
     }
@@ -200,6 +304,11 @@ public class HomeMemberServiceImpl implements HomeMemberService {
 
         log.info("Ownership transferred for home {}: {} -> {}",
                 homeId, currentUsername, newOwnerMember.getUser().getUsername());
+        
+        // Ghi log chuyển quyền sở hữu
+        String eventValue = String.format("{\"oldOwner\":\"%s\",\"newOwner\":\"%s\",\"newOwnerId\":\"%s\"}",
+                currentUsername, newOwnerMember.getUser().getUsername(), newOwnerId);
+        eventLogService.logMemberEvent(homeId, newOwnerId, "HOME_TRANSFER_OWNERSHIP", eventValue, "WEB");
     }
 
     private boolean isSystemAdmin() {
@@ -214,6 +323,27 @@ public class HomeMemberServiceImpl implements HomeMemberService {
         return homeMemberRepository.findByHomeIdAndUserId(homeId, userId).isPresent();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public HomeMemberResponse getMemberByHomeIdAndUserId(Long homeId, String userId) {
+        try {
+            HomeMember member = homeMemberRepository.findByHomeIdAndUserIdWithUser(homeId, userId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Member not found for homeId: " + homeId + " and userId: " + userId
+                    ));
+
+            return homeMemberMapper.toResponse(member);
+        } catch (ResourceNotFoundException e) {
+            homeRepository.findById(homeId).ifPresent(home -> {
+                if (home.getOwner() != null && userId.equals(home.getOwner().getId())) {
+                    log.info("User {} is owner of home {} but not in home_members table", userId, homeId);
+                }
+            });
+
+            throw e;
+        }
+    }
+
     // Helper: Lấy Member hiện tại hoặc ném lỗi nếu không thuộc nhà
     private HomeMember getMemberOrThrow(Long homeId, String username) {
         return homeMemberRepository.findByHomeIdAndUsernameWithUser(homeId, username)
@@ -224,8 +354,6 @@ public class HomeMemberServiceImpl implements HomeMemberService {
     private void validatePrivilege(HomeMember member, HomeMemberRole minRole) {
         HomeMemberRole currentRole = member.getRole();
 
-        // Logic so sánh: OWNER > ADMIN > MEMBER > GUEST
-        // Ở đây so sánh đơn giản: Nếu cần role ADMIN thì chỉ OWNER và ADMIN được phép
         if (minRole == HomeMemberRole.ADMIN) {
             if (currentRole != HomeMemberRole.OWNER && currentRole != HomeMemberRole.ADMIN) {
                 throw new UnauthorizedException(ErrorCode.INSUFFICIENT_PERMISSIONS);

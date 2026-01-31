@@ -8,5 +8,6 @@ public enum DeviceType {
     CAMERA,
     SENSOR,
     SWITCH,
-    CURTAIN
+    CURTAIN,
+    OTHER
 }
