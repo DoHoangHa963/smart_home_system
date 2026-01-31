@@ -8,9 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRoomsByHome } from '@/hooks/useRoom';
 import { useDeviceDetection } from '@/hooks/useDeviceDetection';
+import { usePermission } from '@/hooks/usePermission';
+import { HOME_PERMISSIONS } from '@/types/permission';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function Rooms() {
   const { currentHome } = useHomeStore();
+  const { can, hasHomeAccess, isAdmin } = usePermission();
+  const canViewRooms = isAdmin || can(HOME_PERMISSIONS.ROOM_VIEW);
+  const canCreateRoom = isAdmin || can(HOME_PERMISSIONS.ROOM_CREATE);
   const [expandedRoomId, setExpandedRoomId] = useState<number | null>(null);
   const { isMobile, isTablet, type } = useDeviceDetection();
 
@@ -39,6 +45,26 @@ export default function Rooms() {
     if (isTablet) return 'grid-cols-2 lg:grid-cols-3';
     return 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
   };
+
+  if (!hasHomeAccess && !isAdmin) {
+    return (
+      <div className="flex items-center justify-center h-full p-6">
+        <Alert className="max-w-md">
+          <AlertDescription>Vui lòng chọn nhà trước</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (!canViewRooms) {
+    return (
+      <div className="flex items-center justify-center h-full p-6">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertDescription>Bạn không có quyền xem danh sách phòng</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-6 pb-10 ${isMobile ? 'px-3' : 'px-4 md:px-6'}`}>
@@ -75,12 +101,12 @@ export default function Rooms() {
             </div>
           </div>
           
-          {!isMobile && <CreateRoomModal />}
+          {!isMobile && canCreateRoom && <CreateRoomModal />}
         </div>
 
         {isMobile && (
           <div className="flex gap-2">
-            <CreateRoomModal />
+            {canCreateRoom && <CreateRoomModal />}
             <Button 
               variant="outline" 
               size="sm"
@@ -144,7 +170,7 @@ export default function Rooms() {
                 Hãy tạo các phòng để quản lý thiết bị dễ dàng hơn.
               </p>
               <div className="space-y-3">
-                <CreateRoomModal />
+                {canCreateRoom && <CreateRoomModal />}
                 <Button 
                   variant="outline" 
                   size="sm"

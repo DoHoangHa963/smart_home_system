@@ -56,7 +56,8 @@ import {
   Save,
   AlertCircle,
   Edit,
-  Eye // Thêm icon xem chi tiết
+  Eye,
+  Download // Thêm icon export Excel
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -374,6 +375,31 @@ const handleEditUser = async () => {
     setPage(0);
   };
 
+  // Export Users to Excel
+  const handleExportExcel = async () => {
+    try {
+      setIsLoading(true);
+      const blob = await adminApi.exportUsersToExcel();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `users_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Xuất Excel thành công!');
+    } catch (error: any) {
+      console.error('Export error:', error);
+      toast.error(error?.response?.data?.message || 'Xuất Excel thất bại');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePageSizeChange = (value: string) => {
     setPageSize(Number(value));
     setPage(0);
@@ -433,6 +459,16 @@ const handleEditUser = async () => {
         </div>
         
         <div className="flex gap-2">
+          {/* Button Export Excel */}
+          <Button 
+            variant="outline" 
+            onClick={handleExportExcel}
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Xuất Excel
+          </Button>
+
           {/* Dialog Tạo mới */}
           <Dialog open={isCreateOpen} onOpenChange={(open) => {
             setIsCreateOpen(open);
