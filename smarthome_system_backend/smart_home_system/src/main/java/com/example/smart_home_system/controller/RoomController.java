@@ -42,7 +42,7 @@ public class RoomController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.hasHomePermission(#request.homeId, 'ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#request.homeId) or @homeService.hasHomePermissionByName(#request.homeId, 'ROOM_CREATE')")
     public ResponseEntity<ApiResponse<RoomResponse>> createRoom(
             @Valid @RequestBody RoomRequest request
     ) {
@@ -80,7 +80,7 @@ public class RoomController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@roomService.hasRoomWritePermission(#roomId)")
+    @PreAuthorize("hasRole('ADMIN') or @roomService.hasRoomWritePermission(#roomId) or @roomService.hasRoomPermission(#roomId, 'ROOM_UPDATE')")
     public ResponseEntity<ApiResponse<RoomResponse>> updateRoom(
             @PathVariable("roomId") Long roomId,
             @Valid @RequestBody RoomRequest request
@@ -99,7 +99,7 @@ public class RoomController {
             value = RequestApi.ROOM_DELETE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@roomService.hasRoomWritePermission(#roomId)")
+    @PreAuthorize("hasRole('ADMIN') or @roomService.hasRoomWritePermission(#roomId) or @roomService.hasRoomPermission(#roomId, 'ROOM_DELETE')")
     public ResponseEntity<ApiResponse<Void>> deleteRoom(
             @PathVariable("roomId") Long roomId
     ) {
@@ -117,7 +117,7 @@ public class RoomController {
             value = RequestApi.ROOM_LIST_BY_HOME,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
     public ResponseEntity<ApiResponse<Page<RoomResponse>>> getRoomsByHomeId(
             @PathVariable("homeId") Long homeId,
             @Parameter(description = "Pagination parameters")
@@ -137,7 +137,7 @@ public class RoomController {
             value = "/home/{homeId}/search",
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
     public ResponseEntity<ApiResponse<Page<RoomResponse>>> searchRooms(
             @PathVariable("homeId") Long homeId,
             @RequestParam(value = "name", required = false) String name,

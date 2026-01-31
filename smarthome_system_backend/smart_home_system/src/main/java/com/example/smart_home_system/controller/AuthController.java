@@ -39,6 +39,7 @@ public class AuthController {
     @GetMapping(value = RequestApi.USER_ME)
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser() {
         UserResponse user = authService.getCurrentUser();
+
         return ResponseEntity.ok(ApiResponse.success("User create successfully",user));
     }
 

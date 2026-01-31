@@ -9,10 +9,7 @@ import com.example.smart_home_system.entity.Role;
 import com.example.smart_home_system.entity.User;
 import com.example.smart_home_system.enums.RoleType;
 import com.example.smart_home_system.enums.UserStatus;
-import com.example.smart_home_system.exception.DuplicateResourceException;
-import com.example.smart_home_system.exception.ErrorCode;
-import com.example.smart_home_system.exception.GlobalExceptionHandler;
-import com.example.smart_home_system.exception.UnauthorizedException;
+import com.example.smart_home_system.exception.*;
 import com.example.smart_home_system.mapper.UserMapper;
 import com.example.smart_home_system.repository.RoleRepository;
 import com.example.smart_home_system.repository.UserRepository;
@@ -33,6 +30,40 @@ import org.springframework.stereotype.Service;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Implementation of {@link AuthService} for authentication and authorization operations.
+ * 
+ * <p>This service provides secure authentication mechanisms including:
+ * <ul>
+ *   <li>User registration with password hashing and role assignment</li>
+ *   <li>Login with JWT token generation</li>
+ *   <li>Token refresh for session management</li>
+ *   <li>Profile updates and password changes</li>
+ *   <li>Secure logout with token invalidation</li>
+ * </ul>
+ * 
+ * <p><b>Security Implementation:</b>
+ * <ul>
+ *   <li>Passwords are hashed using BCrypt encoder</li>
+ *   <li>JWT tokens are generated using RSA or HMAC algorithm</li>
+ *   <li>Refresh tokens are stored in database for validation</li>
+ *   <li>Account status is verified before allowing login</li>
+ * </ul>
+ * 
+ * <p><b>Registration Process:</b>
+ * <ol>
+ *   <li>Validate username and email uniqueness</li>
+ *   <li>Hash password with BCrypt</li>
+ *   <li>Assign default USER role</li>
+ *   <li>Generate JWT and refresh tokens</li>
+ * </ol>
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see AuthService
+ * @see JwtTokenProvider
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -58,20 +89,17 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("Email is already taken");
         }
 
+        User user = userMapper.toUser(request);
+
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setStatus(UserStatus.ACTIVE);
+
         Role userRole = roleRepository.findByName(RoleType.USER)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException("Default USER role not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Default USER role not found"));
 
         Set<Role> roles = new HashSet<>();
         roles.add(userRole);
-
-        User user = User.builder()
-                .username(request.getUsername())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .roles(roles)
-                .email(request.getEmail())
-                .phone(request.getPhone())
-                .status(UserStatus.ACTIVE)
-                .build();
+        user.setRoles(roles);
 
         User savedUser = userRepository.save(user);
 
@@ -85,7 +113,6 @@ public class AuthServiceImpl implements AuthService {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         String token = jwtTokenProvider.generateToken(authentication);
-
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser.getId());
 
         return AuthResponse.builder()
@@ -117,7 +144,7 @@ public class AuthServiceImpl implements AuthService {
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
 
         User user = userRepository.findById(userDetails.getId())
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
 
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new UnauthorizedException(ErrorCode.ACCOUNT_DISABLED);
@@ -168,7 +195,7 @@ public class AuthServiceImpl implements AuthService {
         String userId = getCurrentUserId();
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
 
         return userMapper.toUserResponse(user);
     }
@@ -178,7 +205,7 @@ public class AuthServiceImpl implements AuthService {
         String userId = getCurrentUserId();
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
 
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             if (userRepository.existsByEmail(request.getEmail())) {
@@ -209,7 +236,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new GlobalExceptionHandler.ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
             throw new BadRequestException("Current password is incorrect");

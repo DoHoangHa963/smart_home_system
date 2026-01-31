@@ -57,6 +57,10 @@ export const adminApi = {
     return api.get<ApiResponse<User>>(`/users/${userId}`);
   },
 
+  getCurrentUser: async () => {
+    return api.get<ApiResponse<User>>('/api/users/me');
+  },
+
   /**
    * GET /api/v1/users/by-status/{status}
    * Lấy danh sách người dùng theo trạng thái

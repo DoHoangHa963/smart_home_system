@@ -18,6 +18,33 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Service implementation for administrative dashboard and system statistics.
+ * 
+ * <p>This service provides administrator-specific functionality including:
+ * <ul>
+ *   <li>System overview statistics (users, homes, devices)</li>
+ *   <li>Device distribution by type and status</li>
+ *   <li>Recent system activity monitoring</li>
+ *   <li>Daily metrics and trends</li>
+ * </ul>
+ * 
+ * <p><b>Dashboard Statistics:</b>
+ * <ul>
+ *   <li><b>Overview:</b> Total counts and daily new registrations</li>
+ *   <li><b>Device Type Distribution:</b> Breakdown by LIGHT, SENSOR, etc.</li>
+ *   <li><b>Device Status Distribution:</b> ONLINE, OFFLINE, MAINTENANCE</li>
+ *   <li><b>Recent Activities:</b> Last 10 system events</li>
+ * </ul>
+ * 
+ * <p><b>Access Control:</b>
+ * This service should only be accessed by users with ADMIN role.
+ * Controller layer should enforce authorization.
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ */
 @Service("AdminService")
 @RequiredArgsConstructor
 public class AdminServiceImpl {

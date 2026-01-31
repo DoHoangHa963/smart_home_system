@@ -12,7 +12,15 @@ public class DeviceListResponse {
     private String deviceCode;
     private DeviceType type;
     private DeviceStatus status;
+    private String stateValue; // Thêm field này để frontend có thể parse trạng thái từ JSON
 
     private Long roomId;
     private String roomName;
+    
+    /**
+     * GPIO pin number trên ESP32 tương ứng với device này
+     * Được tự động map từ deviceCode sử dụng GPIOMapping
+     * null nếu device không có GPIO mapping
+     */
+    private Integer gpioPin;
 }

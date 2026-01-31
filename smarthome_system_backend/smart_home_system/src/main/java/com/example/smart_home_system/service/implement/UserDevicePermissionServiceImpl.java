@@ -21,6 +21,36 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Implementation of {@link UserDevicePermissionService} for managing device-level permissions.
+ * 
+ * <p>This service provides the core business logic for device permission management including:
+ * <ul>
+ *   <li>Assigning specific device permissions to users</li>
+ *   <li>Updating existing device permission configurations</li>
+ *   <li>Revoking device access from users</li>
+ *   <li>Querying permissions by user or device</li>
+ * </ul>
+ * 
+ * <p><b>Use Cases:</b>
+ * <ul>
+ *   <li>Allow guests to control only specific devices</li>
+ *   <li>Restrict children's access to certain devices</li>
+ *   <li>Temporary access for maintenance personnel</li>
+ * </ul>
+ * 
+ * <p><b>Validation:</b>
+ * <ul>
+ *   <li>User must exist before assigning permission</li>
+ *   <li>Device must exist before assigning permission</li>
+ *   <li>Duplicate user-device permission combinations are not allowed</li>
+ * </ul>
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see UserDevicePermissionService
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

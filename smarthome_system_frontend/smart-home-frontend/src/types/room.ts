@@ -17,6 +17,31 @@ export interface RoomResponse {
   updatedAt?: string;
 }
 
+export interface RoomValidationRules {
+  name: {
+    required: boolean;
+    minLength: number;
+    maxLength: number;
+    pattern: RegExp;
+    patternMessage: string;
+  };
+}
+
+export const ROOM_VALIDATION: RoomValidationRules = {
+  name: {
+    required: true,
+    minLength: 2,
+    maxLength: 50,
+    pattern: /^[\p{L}0-9\s.,-]+$/u,
+    patternMessage: 'Tên phòng chỉ được chứa chữ cái, số, dấu cách và các ký tự: .,-',
+  },
+};
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors: Record<string, string>;
+}
+
 // Room Statistics Type
 export interface RoomStatistics {
   totalDevices: number;

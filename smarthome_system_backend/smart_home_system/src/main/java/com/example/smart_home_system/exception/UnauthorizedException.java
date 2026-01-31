@@ -1,14 +1,19 @@
 package com.example.smart_home_system.exception;
 
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-
-@EqualsAndHashCode(callSuper = true)
-@AllArgsConstructor
-@Getter
-@Setter
 public class UnauthorizedException extends RuntimeException {
-    private ErrorCode errorCode;
+    private final ErrorCode errorCode;
+
+    public UnauthorizedException(ErrorCode errorCode) {
+        super(errorCode.getMessage());
+        this.errorCode = errorCode;
+    }
+
+    public UnauthorizedException(ErrorCode errorCode, String message) {
+        super(message);
+        this.errorCode = errorCode;
+    }
+
+    public ErrorCode getErrorCode() {
+        return errorCode;
+    }
 }

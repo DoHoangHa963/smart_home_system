@@ -1,15 +1,16 @@
 package com.example.smart_home_system.controller;
 
-import com.example.smart_home_system.constant.RequestApi;
 import com.example.smart_home_system.dto.response.ApiResponse;
 import com.example.smart_home_system.dto.response.DeviceListResponse;
 import com.example.smart_home_system.dto.response.UserResponse;
 import com.example.smart_home_system.dto.response.admin.AdminDashboardResponse;
 import com.example.smart_home_system.service.implement.AdminServiceImpl;
-import com.example.smart_home_system.service.DeviceService;
+import com.example.smart_home_system.service.ExcelExportService;
 import com.example.smart_home_system.service.UserService;
+import com.example.smart_home_system.service.implement.DeviceServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +19,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/v1/admin")
@@ -28,7 +32,8 @@ public class AdminController {
 
     private final AdminServiceImpl adminService;
     private final UserService userService;
-    private final DeviceService deviceService;
+    private final DeviceServiceImpl deviceService;
+    private final ExcelExportService excelExportService;
 
     @Operation(summary = "Get Detailed Dashboard", description = "Returns comprehensive stats for admin dashboard widgets and charts")
     @GetMapping("/dashboard/detail")
@@ -73,5 +78,17 @@ public class AdminController {
             @RequestParam String status) { // Client gửi lên "ACTIVE" hoặc "BANNED"
         userService.changeStatus(userId, status);
         return ResponseEntity.ok(ApiResponse.success("User status updated", null));
+    }
+
+    // 5. API Export Users to Excel
+    @Operation(summary = "Export Users to Excel", description = "Export all users to Excel file")
+    @GetMapping("/users/export/excel")
+    public void exportUsersToExcel(HttpServletResponse response) throws IOException {
+        // Get all users without pagination for export
+        Pageable allPageable = PageRequest.of(0, Integer.MAX_VALUE, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<UserResponse> usersPage = userService.getAllUsers(allPageable);
+        List<UserResponse> users = usersPage.getContent();
+        
+        excelExportService.exportUsersToExcel(users, response);
     }
 }

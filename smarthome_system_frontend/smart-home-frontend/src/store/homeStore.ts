@@ -14,6 +14,12 @@ const extractData = (data: any) => {
   return [];
 };
 
+const getErrorMessage = (error: any, defaultMsg: string) => {
+  return error.response?.data?.detail || 
+         error.response?.data?.message || 
+         defaultMsg;
+};
+
 interface HomeState {
   homes: Home[];
   currentHome: Home | null;
@@ -23,7 +29,7 @@ interface HomeState {
   error: string | null;
 
   fetchMyHomes: () => Promise<void>;
-  setCurrentHome: (home: Home | null) => Promise<void>;
+  setCurrentHome: (home: Home | null, bypassPermission?: boolean) => Promise<void>;
   createHome: (name: string, address?: string, timeZone?: string) => Promise<Home>;
   updateHome: (homeId: number, name: string, address?: string, timeZone?: string) => Promise<void>;
   deleteHome: (homeId: number) => Promise<void>;
@@ -58,15 +64,16 @@ export const useHomeStore = create<HomeState>()(
         set({ isLoading: true, error: null });
         try {
           const response = await homeApi.getMyHomes();
+          
           const homesArray = extractData(response.data);
           set({ homes: homesArray, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to fetch homes';
+          const errorMsg = getErrorMessage(error, 'Failed to fetch homes');
           set({ error: errorMsg, isLoading: false });
         }
       },
 
-      setCurrentHome: async (home: Home | null) => {
+      setCurrentHome: async (home: Home | null, bypassPermission = false) => {
         set({ isLoading: true, error: null });
 
         if (!home) {
@@ -75,22 +82,30 @@ export const useHomeStore = create<HomeState>()(
         }
 
         try {
-          const membersResponse = await homeApi.getHomeMembers(home.id);
-          const members = membersResponse.data;
-
           const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}');
-          const userId = authState.state?.user?.id || authState.state?.user?.userId;
-          
-          const currentMember = members.find(m => m.userId === userId) || null;
+          const user = authState.state?.user;
+          const userId = user?.id || user?.userId;
+          const isAdmin = user?.roles?.includes('ADMIN');
 
-          set({
-            currentHome: home,
-            currentMember: currentMember,
-            members: members,
-            isLoading: false,
-          });
+          // Nếu là admin và có bypassPermission
+          if (isAdmin && bypassPermission) {
+            const adminMember: Partial<HomeMember> = {
+              userId: userId,
+              username: user?.username || 'Administrator',
+              role: 'ADMIN',
+              joinedAt: new Date().toISOString(),
+            };
+
+            set({
+              currentHome: home,
+              currentMember: adminMember as HomeMember, // Cast nếu cần
+              isLoading: false,
+            });
+            localStorage.setItem('currentHome', JSON.stringify(home));
+            return;
+          }
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to set current home';
+          const errorMsg = getErrorMessage(error, 'Failed to set current home');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
         }
@@ -110,7 +125,7 @@ export const useHomeStore = create<HomeState>()(
           toast.success('Tạo nhà thành công!');
           return newHome;
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to create home';
+          const errorMsg = getErrorMessage(error, 'Failed to create home');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -132,7 +147,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Cập nhật nhà thành công!');
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to update home';
+          const errorMsg = getErrorMessage(error, 'Failed to update home');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -153,7 +168,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Xóa nhà thành công!');
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to delete home';
+          const errorMsg = getErrorMessage(error, 'Failed to delete home');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -174,7 +189,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Đã rời khỏi nhà!');
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to leave home';
+          const errorMsg = getErrorMessage(error, 'Failed to leave home');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -196,7 +211,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Chuyển quyền sở hữu thành công!');
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to transfer ownership';
+          const errorMsg = getErrorMessage(error, 'Failed to transfer ownership');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -210,7 +225,7 @@ export const useHomeStore = create<HomeState>()(
           const membersArray = extractData(response.data);
           set({ members: membersArray, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to fetch members';
+          const errorMsg = getErrorMessage(error, 'Failed to fetch members');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -227,11 +242,11 @@ export const useHomeStore = create<HomeState>()(
 
           await get().fetchHomeMembers(homeId);
 
-          toast.success('Thêm thành viên thành công!');
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to add member';
+          const status = error.response?.status;
+          const errorCode = error.response?.data?.code;
+          const errorMsg = getErrorMessage(error, 'Không thể thêm thành viên. Vui lòng thử lại.');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
           throw error;
         }
       },
@@ -248,7 +263,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Xóa thành viên thành công!');
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to remove member';
+          const errorMsg = getErrorMessage(error, 'Failed to remove member');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -271,7 +286,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Cập nhật vai trò thành công!');
         } catch (error: any) {
-          const errorMsg = error.response?.data?.message || 'Failed to update role';
+          const errorMsg = getErrorMessage(error, 'Failed to update role');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
