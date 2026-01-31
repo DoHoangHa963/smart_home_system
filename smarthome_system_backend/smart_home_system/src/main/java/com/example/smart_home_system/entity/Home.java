@@ -41,4 +41,11 @@ public class Home extends BaseEntity {
 
     @OneToMany(mappedBy = "home", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     Set<HomeMember> members = new HashSet<>();
+
+    /**
+     * MCU Gateway của home này
+     * Mỗi home có thể có một MCU gateway (ESP32)
+     */
+    @OneToMany(mappedBy = "home", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    Set<MCUGateway> mcuGateways = new HashSet<>();
 }

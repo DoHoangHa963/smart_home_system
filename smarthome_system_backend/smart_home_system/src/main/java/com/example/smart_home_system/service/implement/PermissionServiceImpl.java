@@ -17,6 +17,35 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Implementation of {@link PermissionService} for managing system-level Permission entities.
+ * 
+ * <p>This service provides the core business logic for permission management including:
+ * <ul>
+ *   <li>Creating permissions with unique name validation</li>
+ *   <li>Updating permission details</li>
+ *   <li>Permission lookup by ID, name, or batch IDs</li>
+ *   <li>Hard deletion of permissions</li>
+ * </ul>
+ * 
+ * <p><b>Permission Naming:</b>
+ * Permissions should follow the {@code RESOURCE_ACTION} pattern:
+ * <ul>
+ *   <li>USER_CREATE, USER_READ, USER_UPDATE, USER_DELETE</li>
+ *   <li>DEVICE_CONTROL, DEVICE_CONFIGURE</li>
+ * </ul>
+ * 
+ * <p><b>Validation:</b>
+ * <ul>
+ *   <li>Permission names must be unique</li>
+ *   <li>All IDs in batch operations must exist</li>
+ * </ul>
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see PermissionService
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

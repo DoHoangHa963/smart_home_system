@@ -10,12 +10,18 @@ import com.example.smart_home_system.enums.HomeMemberStatus;
 import com.example.smart_home_system.exception.AppException;
 import com.example.smart_home_system.exception.ErrorCode;
 import com.example.smart_home_system.mapper.HomeMapper;
+import com.example.smart_home_system.dto.response.admin.RecentActivityResponse;
+import com.example.smart_home_system.entity.EventLog;
+import com.example.smart_home_system.repository.EventLogRepository;
 import com.example.smart_home_system.repository.HomeMemberRepository;
 import com.example.smart_home_system.repository.HomeRepository;
 import com.example.smart_home_system.repository.RoomRepository;
 import com.example.smart_home_system.repository.UserRepository;
+import com.example.smart_home_system.service.EventLogService;
+import org.springframework.data.domain.PageRequest;
 import com.example.smart_home_system.service.HomeMemberService;
 import com.example.smart_home_system.service.HomeService;
+import com.example.smart_home_system.util.PermissionUtils;
 import com.example.smart_home_system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,10 +34,40 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Implementation of {@link HomeService} for managing Home entities.
+ * 
+ * <p>This service provides the core business logic for home management including:
+ * <ul>
+ *   <li>Creating homes with automatic owner member creation</li>
+ *   <li>Updating and deleting homes with ownership verification</li>
+ *   <li>Retrieving homes with membership statistics</li>
+ *   <li>Permission and ownership verification methods</li>
+ * </ul>
+ * 
+ * <p><b>Transaction Management:</b>
+ * All methods are transactional. Read operations use read-only transactions
+ * for better performance.
+ * 
+ * <p><b>Home Creation Flow:</b>
+ * <ol>
+ *   <li>Validate user hasn't exceeded home limit</li>
+ *   <li>Check for duplicate home name</li>
+ *   <li>Validate timezone</li>
+ *   <li>Create home entity</li>
+ *   <li>Auto-create OWNER HomeMember entry</li>
+ * </ol>
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see HomeService
+ */
 @Service("homeService")
 @RequiredArgsConstructor
 @Transactional
@@ -44,6 +80,8 @@ public class HomeServiceImpl implements HomeService {
     private final HomeMemberService homeMemberService;
     private final int MAX_HOMES_PER_USER = 3;
     private final RoomRepository roomRepository;
+    private final EventLogRepository eventLogRepository;
+    private final EventLogService eventLogService;
 
     @Override
     @Transactional
@@ -86,9 +124,19 @@ public class HomeServiceImpl implements HomeService {
                 .user(currentUser)
                 .role(HomeMemberRole.OWNER)
                 .status(HomeMemberStatus.ACTIVE.name())
+                .joinedAt(LocalDateTime.now())
+                .invitedBy("SYSTEM")
+                .invitedAt(LocalDateTime.now()) // THÊM
+                .permissions(PermissionUtils.getDefaultPermissionsJsonByRole(HomeMemberRole.OWNER))
                 .build();
 
         homeMemberRepository.save(ownerMember);
+
+        // Ghi log tạo home
+        String eventValue = String.format("{\"homeName\":\"%s\",\"address\":\"%s\",\"timeZone\":\"%s\"}",
+                home.getName(), home.getAddress() != null ? home.getAddress() : "",
+                home.getTimeZone() != null ? home.getTimeZone() : "");
+        eventLogService.logHomeEvent(home, "HOME_CREATE", eventValue, "WEB");
 
         return homeMapper.toResponse(home);
     }
@@ -109,7 +157,14 @@ public class HomeServiceImpl implements HomeService {
         }
 
         homeMapper.updateHomeFromRequest(home, request);
-        return homeMapper.toResponse(homeRepository.save(home));
+        Home updatedHome = homeRepository.save(home);
+        
+        // Ghi log cập nhật home
+        String eventValue = String.format("{\"homeName\":\"%s\",\"address\":\"%s\"}",
+                updatedHome.getName(), updatedHome.getAddress() != null ? updatedHome.getAddress() : "");
+        eventLogService.logHomeEvent(updatedHome, "HOME_UPDATE", eventValue, "WEB");
+        
+        return homeMapper.toResponse(updatedHome);
     }
 
     @Override
@@ -120,6 +175,11 @@ public class HomeServiceImpl implements HomeService {
         Home home = homeRepository.findByIdAndOwnerId(homeId, currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
 
+        // Ghi log trước khi xóa
+        String eventValue = String.format("{\"homeName\":\"%s\",\"address\":\"%s\"}",
+                home.getName(), home.getAddress() != null ? home.getAddress() : "");
+        eventLogService.logHomeEvent(home, "HOME_DELETE", eventValue, "WEB");
+        
         // Soft delete (BaseEntity xử lý nếu cấu hình) hoặc xóa cứng cascade
         home.softDelete();
         homeRepository.save(home);
@@ -223,22 +283,42 @@ public class HomeServiceImpl implements HomeService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public boolean isHomeMember(Long homeId) {
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId == null) {
+                return false;
+            }
+            return homeMemberRepository.findByHomeIdAndUserId(homeId, currentUserId).isPresent();
+        } catch (Exception e) {
+            log.error("Error checking home membership for homeId={}: {}", homeId, e.getMessage(), e);
             return false;
         }
-        return homeMemberRepository.findByHomeIdAndUserId(homeId, currentUserId).isPresent();
     }
 
     @Override
+    @Transactional(readOnly = true, timeout = 5)  // Timeout 5 giây để tránh chờ quá lâu
     public boolean isHomeOwner(Long homeId) {
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        return homeMemberRepository.findByHomeIdAndUserIdAndRole(
-                homeId,
-                currentUserId,
-                HomeMemberRole.OWNER
-        ).isPresent();
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId == null) {
+                return false;
+            }
+            // Sử dụng exists query để tối ưu performance thay vì find + isPresent
+            boolean isOwner = homeMemberRepository.existsByHomeIdAndUserIdAndRole(
+                    homeId,
+                    currentUserId,
+                    HomeMemberRole.OWNER
+            );
+            return isOwner;
+        } catch (org.springframework.transaction.TransactionTimedOutException e) {
+            log.warn("Transaction timeout when checking home ownership for homeId={}", homeId);
+            return false;
+        } catch (Exception e) {
+            log.error("Error checking home ownership for homeId={}: {}", homeId, e.getMessage(), e);
+            return false;
+        }
     }
 
     @Override
@@ -257,6 +337,25 @@ public class HomeServiceImpl implements HomeService {
                 return role == HomeMemberRole.OWNER || role == HomeMemberRole.ADMIN || role == HomeMemberRole.MEMBER;
             default:
                 return role == HomeMemberRole.OWNER;
+        }
+    }
+
+    @Override
+    public boolean hasHomePermissionByName(Long homeId, String permissionName) {
+        try {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+            HomeMember member = homeMemberRepository.findByHomeIdAndUserId(homeId, currentUserId)
+                    .orElse(null);
+
+            if (member == null) {
+                return false;
+            }
+
+            // Check if member has this specific permission (includes role-based + custom permissions)
+            return member.hasPermission(permissionName);
+        } catch (Exception e) {
+            log.warn("Error checking permission {} for home {}: {}", permissionName, homeId, e.getMessage());
+            return false;
         }
     }
 
@@ -287,6 +386,112 @@ public class HomeServiceImpl implements HomeService {
     @Override
     public void transferOwnership(Long homeId, String newOwnerId) {
         homeMemberService.transferOwnership(homeId, newOwnerId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RecentActivityResponse> getRecentActivities(Long homeId, int limit) {
+        // Kiểm tra quyền truy cập
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (!homeMemberRepository.existsByHomeIdAndUserId(homeId, currentUserId)) {
+            throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
+        }
+
+        // Lấy event logs theo homeId
+        List<EventLog> eventLogs = eventLogRepository.findRecentLogsByHomeId(
+                homeId, PageRequest.of(0, limit));
+
+        // Map sang RecentActivityResponse
+        return eventLogs.stream()
+                .map(this::mapToActivityResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Map EventLog entity sang RecentActivityResponse DTO
+     */
+    private RecentActivityResponse mapToActivityResponse(EventLog log) {
+        String username = log.getUser() != null ? log.getUser().getUsername() : "System";
+        String deviceName = log.getDevice() != null ? log.getDevice().getName() : null;
+        
+        // Format description dựa trên eventType và device
+        String description;
+        if (deviceName != null) {
+            description = formatActivityDescription(log.getEventType(), deviceName, username);
+        } else {
+            description = String.format("[%s] %s: %s", 
+                    log.getSource() != null ? log.getSource() : "System",
+                    username, 
+                    log.getEventType());
+        }
+
+        // Xác định type dựa trên eventType
+        String type = "INFO";
+        if (log.getEventType() != null) {
+            String eventTypeUpper = log.getEventType().toUpperCase();
+            if (eventTypeUpper.contains("ERROR") || eventTypeUpper.contains("FAIL")) {
+                type = "ERROR";
+            } else if (eventTypeUpper.contains("WARNING") || eventTypeUpper.contains("ALERT")) {
+                type = "WARNING";
+            } else if (eventTypeUpper.contains("SUCCESS") || eventTypeUpper.contains("COMPLETE")) {
+                type = "SUCCESS";
+            }
+        }
+
+        return RecentActivityResponse.builder()
+                .id(log.getId())
+                .description(description)
+                .type(type)
+                .relatedUser(username)
+                .timestamp(log.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * Format activity description dựa trên eventType
+     */
+    private String formatActivityDescription(String eventType, String deviceName, String username) {
+        if (eventType == null) {
+            return String.format("%s: %s", deviceName, "Hoạt động");
+        }
+
+        String eventUpper = eventType.toUpperCase();
+        
+        // Device control events
+        if (eventUpper.contains("TURN_ON") || eventUpper.contains("ON")) {
+            return String.format("%s đã bật %s", username, deviceName);
+        }
+        if (eventUpper.contains("TURN_OFF") || eventUpper.contains("OFF")) {
+            return String.format("%s đã tắt %s", username, deviceName);
+        }
+        if (eventUpper.contains("TOGGLE")) {
+            return String.format("%s đã chuyển trạng thái %s", username, deviceName);
+        }
+        
+        // Device status events
+        if (eventUpper.contains("ONLINE")) {
+            return String.format("%s đã kết nối", deviceName);
+        }
+        if (eventUpper.contains("OFFLINE")) {
+            return String.format("%s đã ngắt kết nối", deviceName);
+        }
+        
+        // Sensor events
+        if (eventUpper.contains("MOTION") || eventUpper.contains("MOVEMENT")) {
+            return String.format("Phát hiện chuyển động ở %s", deviceName);
+        }
+        if (eventUpper.contains("DOOR") && eventUpper.contains("OPEN")) {
+            return String.format("%s đã mở", deviceName);
+        }
+        if (eventUpper.contains("DOOR") && eventUpper.contains("CLOSE")) {
+            return String.format("%s đã đóng", deviceName);
+        }
+        if (eventUpper.contains("GAS") || eventUpper.contains("ALERT")) {
+            return String.format("Cảnh báo: %s phát hiện khí gas", deviceName);
+        }
+        
+        // Default
+        return String.format("%s: %s (%s)", deviceName, eventType, username);
     }
 
     private static final Set<String> VALID_TIME_ZONES = Set.of(

@@ -9,4 +9,10 @@ public class DeviceUpdateRequest {
     private DeviceStatus status;
     private Long roomId;
     private String metadata;
+    
+    /**
+     * GPIO pin number trên ESP32 để điều khiển thiết bị
+     * Giống như Virtual Pin trong Blynk
+     */
+    private Integer gpioPin;
 }
