@@ -3,6 +3,7 @@ package com.example.smart_home_system.exception;
 import com.example.smart_home_system.dto.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -203,6 +204,42 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = ErrorCode.BAD_REQUEST;
         log.warn("[IllegalArgumentException] {} - {}", errorCode.getCode(), ex.getMessage());
         return buildResponse(errorCode, request.getRequestURI(), ex.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolationException(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request) {
+        String message = ex.getMessage();
+        String detail = null;
+        ErrorCode errorCode = ErrorCode.BAD_REQUEST;
+
+        // Kiểm tra nếu là duplicate device code
+        if (message != null && message.contains("UK_delxn6d6q662wndbm0ecublmg") 
+            || (message != null && message.contains("device_code") && message.contains("Duplicate"))) {
+            errorCode = ErrorCode.DEVICE_ALREADY_EXISTS;
+            // Extract device code từ error message nếu có thể
+            if (message.contains("Duplicate entry")) {
+                String[] parts = message.split("Duplicate entry '");
+                if (parts.length > 1) {
+                    String deviceCode = parts[1].split("'")[0];
+                    detail = "Mã thiết bị '" + deviceCode + "' đã được sử dụng. Vui lòng chọn mã khác.";
+                } else {
+                    detail = "Mã thiết bị đã được sử dụng. Vui lòng chọn mã khác.";
+                }
+            } else {
+                detail = "Mã thiết bị đã được sử dụng. Vui lòng chọn mã khác.";
+            }
+            log.warn("[DataIntegrityViolationException - Device Code Duplicate] {} - {}", 
+                    errorCode.getCode(), detail);
+        } else {
+            // Các constraint violation khác
+            detail = "Dữ liệu không hợp lệ hoặc vi phạm ràng buộc. " + 
+                     (message != null ? message : "Vui lòng kiểm tra lại thông tin.");
+            log.warn("[DataIntegrityViolationException] {} - {}", errorCode.getCode(), detail);
+        }
+
+        return buildResponse(errorCode, request.getRequestURI(), detail);
     }
 
     private String buildClassCastDetail(ClassCastException ex) {

@@ -30,6 +30,40 @@ import org.springframework.stereotype.Service;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Implementation of {@link AuthService} for authentication and authorization operations.
+ * 
+ * <p>This service provides secure authentication mechanisms including:
+ * <ul>
+ *   <li>User registration with password hashing and role assignment</li>
+ *   <li>Login with JWT token generation</li>
+ *   <li>Token refresh for session management</li>
+ *   <li>Profile updates and password changes</li>
+ *   <li>Secure logout with token invalidation</li>
+ * </ul>
+ * 
+ * <p><b>Security Implementation:</b>
+ * <ul>
+ *   <li>Passwords are hashed using BCrypt encoder</li>
+ *   <li>JWT tokens are generated using RSA or HMAC algorithm</li>
+ *   <li>Refresh tokens are stored in database for validation</li>
+ *   <li>Account status is verified before allowing login</li>
+ * </ul>
+ * 
+ * <p><b>Registration Process:</b>
+ * <ol>
+ *   <li>Validate username and email uniqueness</li>
+ *   <li>Hash password with BCrypt</li>
+ *   <li>Assign default USER role</li>
+ *   <li>Generate JWT and refresh tokens</li>
+ * </ol>
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see AuthService
+ * @see JwtTokenProvider
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

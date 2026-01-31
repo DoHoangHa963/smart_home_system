@@ -6,7 +6,10 @@ import com.example.smart_home_system.dto.request.UpdatePermissionsRequest;
 import com.example.smart_home_system.dto.request.UpdateRoleRequest;
 import com.example.smart_home_system.dto.response.ApiResponse;
 import com.example.smart_home_system.dto.response.HomeMemberResponse;
+import com.example.smart_home_system.entity.User;
 import com.example.smart_home_system.enums.HomePermission;
+import com.example.smart_home_system.exception.ResourceNotFoundException;
+import com.example.smart_home_system.repository.UserRepository;
 import com.example.smart_home_system.service.HomeMemberService;
 import com.example.smart_home_system.service.HomePermissionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,6 +39,25 @@ public class HomeMemberController {
 
     private final HomeMemberService homeMemberService;
     private final HomePermissionService homePermissionService;
+    private final UserRepository userRepository;
+
+    @GetMapping("/{homeId}/members/me")
+    @PreAuthorize("@homeService.isHomeMember(#homeId)")
+    public ResponseEntity<ApiResponse<HomeMemberResponse>> getMyHomeMember(
+            @PathVariable Long homeId,
+            Authentication authentication
+    ) {
+        String username = authentication.getName();
+
+        // Lấy userId từ username
+        String userId = userRepository.findByUsername(username)
+                .map(User::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
+
+        HomeMemberResponse member = homeMemberService.getMemberByHomeIdAndUserId(homeId, userId);
+
+        return ResponseEntity.ok(ApiResponse.success("Member info retrieved", member));
+    }
 
     @Operation(
             summary = "Get home members",
@@ -63,7 +86,7 @@ public class HomeMemberController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.hasHomePermission(#homeId, 'ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId) or @homeService.hasHomePermissionByName(#homeId, 'MEMBER_INVITE')")
     public ResponseEntity<ApiResponse<HomeMemberResponse>> addMember(
             @PathVariable("homeId") Long homeId,
             @Valid @RequestBody AddMemberRequest request
@@ -83,7 +106,7 @@ public class HomeMemberController {
             value = RequestApi.HOME_REMOVE_MEMBER,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homeService.hasHomePermission(#homeId, 'MANAGE_MEMBERS')")
+    @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId) or @homeService.hasHomePermissionByName(#homeId, 'MEMBER_REMOVE')")
     public ResponseEntity<ApiResponse<Void>> removeMember(
             @PathVariable("homeId") Long homeId,
             @PathVariable("userId") String userId
@@ -124,7 +147,7 @@ public class HomeMemberController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homePermissionService.isOwner(#homeId)")
+    @PreAuthorize("hasRole('ADMIN') or @homePermissionService.isOwner(#homeId)")
     public ResponseEntity<ApiResponse<Void>> updatePermissions(
             @PathVariable("homeId") Long homeId,
             @PathVariable("userId") String userId,
@@ -144,7 +167,7 @@ public class HomeMemberController {
             value = "/{homeId}/members/{userId}/permissions",
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    @PreAuthorize("@homePermissionService.hasPermission(#homeId, T(com.example.smart_home_system.enums.HomePermission).MEMBER_VIEW)")
+    @PreAuthorize("hasRole('ADMIN') or @homePermissionService.hasPermission(#homeId, T(com.example.smart_home_system.enums.HomePermission).MEMBER_VIEW)")
     public ResponseEntity<ApiResponse<Set<String>>> getMemberPermissions(
             @PathVariable("homeId") Long homeId,
             @PathVariable("userId") String userId

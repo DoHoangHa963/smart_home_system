@@ -3,9 +3,9 @@ package com.example.smart_home_system.security.config;
 import com.example.smart_home_system.constant.RequestApi;
 import com.example.smart_home_system.security.jwt.JwtAuthenticationEntryPoint;
 import com.example.smart_home_system.security.jwt.JwtAuthenticationFilter;
+import com.example.smart_home_system.security.mcu.MCUApiKeyFilter;
 import com.example.smart_home_system.security.service.CustomPermissionEvaluator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -27,52 +27,60 @@ import org.springframework.web.cors.CorsConfigurationSource;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final AuthenticationProvider authenticationProvider;
-    private final CustomPermissionEvaluator customPermissionEvaluator;
-    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final WebConfig webConfig;
+        private final JwtAuthenticationFilter jwtAuthenticationFilter;
+        private final MCUApiKeyFilter mcuApiKeyFilter;
+        private final AuthenticationProvider authenticationProvider;
+        private final CustomPermissionEvaluator customPermissionEvaluator;
+        private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+        private final WebConfig webConfig;
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource) throws Exception {
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(webConfig.corsConfigurationSource()))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                RequestApi.AUTH + RequestApi.AUTH_LOGIN,
-                                RequestApi.AUTH + RequestApi.AUTH_REGISTER,
-                                RequestApi.AUTH + RequestApi.AUTH_VERIFY_EMAIL,
-                                RequestApi.AUTH + RequestApi.AUTH_RESEND_VERIFICATION,
-                                RequestApi.AUTH + RequestApi.AUTH_FORGOT_PASSWORD,
-                                RequestApi.AUTH + RequestApi.AUTH_RESET_PASSWORD,
-                                RequestApi.AUTH + RequestApi.AUTH_VERIFY_OTP,
-                                RequestApi.AUTH + RequestApi.AUTH_REFRESH_TOKEN,
-                                "v3/api-docs/**", "swagger-ui/**", "swagger-ui.html"
-                        ).permitAll()
+        @Bean
+        public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                        CorsConfigurationSource corsConfigurationSource) throws Exception {
+                http
+                                .csrf(AbstractHttpConfigurer::disable)
+                                .cors(cors -> cors.configurationSource(webConfig.corsConfigurationSource()))
+                                .authorizeHttpRequests(auth -> auth
+                                                .requestMatchers(
+                                                                RequestApi.AUTH + RequestApi.AUTH_LOGIN,
+                                                                RequestApi.AUTH + RequestApi.AUTH_REGISTER,
+                                                                RequestApi.AUTH + RequestApi.AUTH_VERIFY_EMAIL,
+                                                                RequestApi.AUTH + RequestApi.AUTH_RESEND_VERIFICATION,
+                                                                RequestApi.AUTH + RequestApi.AUTH_FORGOT_PASSWORD,
+                                                                RequestApi.AUTH + RequestApi.AUTH_RESET_PASSWORD,
+                                                                RequestApi.AUTH + RequestApi.AUTH_VERIFY_OTP,
+                                                                RequestApi.AUTH + RequestApi.AUTH_REFRESH_TOKEN,
+                                                                "v3/api-docs/**", "swagger-ui/**", "swagger-ui.html",
+                                                                "/ws/**")
+                                                .permitAll()
 
-                        .requestMatchers(RequestApi.HEALTH + "/**").permitAll()
-                        .requestMatchers(RequestApi.ADMIN + "/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, RequestApi.FILE + "/download/**").permitAll()
-                        .requestMatchers("/api/v1/rooms/**").authenticated()
-                        .anyRequest().authenticated()
-                )
-                .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                )
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authenticationProvider(authenticationProvider)
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                                                // MCU endpoints có thể được authenticate bằng API Key hoặc JWT
+                                                // (API Key cho ESP32, JWT cho pairing từ frontend)
+                                                .requestMatchers(RequestApi.MCU_GATEWAY + "/**").authenticated()
 
-        return http.build();
-    }
+                                                .requestMatchers(RequestApi.HEALTH + "/**").permitAll()
+                                                .requestMatchers(RequestApi.ADMIN + "/**").hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.GET, RequestApi.FILE + "/download/**")
+                                                .permitAll()
+                                                .requestMatchers("/api/v1/rooms/**").authenticated()
+                                                .requestMatchers("/api/v1/homes/**").authenticated()
+                                                .anyRequest().authenticated())
+                                .exceptionHandling(exception -> exception
+                                                .authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .authenticationProvider(authenticationProvider)
+                                // MCU API Key Filter chạy trước JWT Filter để ưu tiên check API Key
+                                .addFilterBefore(mcuApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-    @Bean
-    public MethodSecurityExpressionHandler methodSecurityExpressionHandler() {
-        DefaultMethodSecurityExpressionHandler expressionHandler =
-                new DefaultMethodSecurityExpressionHandler();
-        expressionHandler.setPermissionEvaluator(customPermissionEvaluator);
-        return expressionHandler;
-    }
+                return http.build();
+        }
+
+        @Bean
+        public MethodSecurityExpressionHandler methodSecurityExpressionHandler() {
+                DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+                expressionHandler.setPermissionEvaluator(customPermissionEvaluator);
+                return expressionHandler;
+        }
 }
-

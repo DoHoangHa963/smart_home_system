@@ -22,6 +22,34 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Implementation of {@link RoleService} for managing system-level Role entities.
+ * 
+ * <p>This service provides the core business logic for role management including:
+ * <ul>
+ *   <li>Creating roles with permission assignment</li>
+ *   <li>Updating role names and permissions</li>
+ *   <li>Role lookup by ID or name</li>
+ *   <li>Soft deletion with user assignment validation</li>
+ * </ul>
+ * 
+ * <p><b>Validation Rules:</b>
+ * <ul>
+ *   <li>Role names must be valid {@link RoleType} enum values</li>
+ *   <li>Role names must be unique</li>
+ *   <li>Roles with assigned users cannot be deleted</li>
+ * </ul>
+ * 
+ * <p><b>Deletion Behavior:</b>
+ * Roles are soft-deleted to preserve audit trails. The role can be
+ * restored by an administrator if needed.
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see RoleService
+ * @see RoleType
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

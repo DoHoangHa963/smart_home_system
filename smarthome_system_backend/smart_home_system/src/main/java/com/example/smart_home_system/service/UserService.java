@@ -11,6 +11,41 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Service interface for comprehensive User management operations.
+ * 
+ * <p>This service provides complete user lifecycle management including:
+ * <ul>
+ *   <li>User CRUD operations</li>
+ *   <li>User search and filtering</li>
+ *   <li>Password management</li>
+ *   <li>Avatar/profile picture management</li>
+ *   <li>Role and permission assignment</li>
+ *   <li>Account status management</li>
+ * </ul>
+ * 
+ * <p><b>User Status Types:</b>
+ * <ul>
+ *   <li><b>ACTIVE</b> - Normal user with full access</li>
+ *   <li><b>INACTIVE</b> - Deactivated account</li>
+ *   <li><b>BANNED</b> - Permanently banned user</li>
+ *   <li><b>PENDING</b> - Awaiting email verification</li>
+ * </ul>
+ * 
+ * <p><b>Role Management:</b>
+ * Users can have multiple system-level roles (USER, ADMIN) which are
+ * different from home-level roles (OWNER, MEMBER, GUEST).
+ * 
+ * <p><b>Soft Delete:</b>
+ * Users are soft-deleted by default to preserve audit trails and
+ * can be restored by administrators.
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see UserServiceImpl
+ * @see AuthService
+ */
 public interface UserService {
 
     // Create

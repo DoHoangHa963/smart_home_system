@@ -7,6 +7,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -103,6 +104,10 @@ public class HomeMember extends BaseEntity {
             }
         }
         return true;
+    }
+
+    public List<String> getAllPermissionsAsList() {
+        return PermissionUtils.mergePermissionsAsList(this.role, this.permissions);
     }
 
 }

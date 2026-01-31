@@ -101,10 +101,18 @@ public class JwtTokenProvider {
             if (scope != null && !scope.isEmpty()) {
                 String[] scopeArray = scope.split(" ");
                 for (String role : scopeArray) {
-                    if (!role.startsWith("ROLE_")) {
-                        role = "ROLE_" + role;
+                    // Scope can contain BOTH:
+                    // - roles: "ROLE_ADMIN", "ROLE_USER" (or legacy "ADMIN"/"USER")
+                    // - permissions: "DEVICE_VIEW", "HOME_UPDATE", ...
+                    //
+                    // Only roles should be "ROLE_*". Permissions should stay as-is.
+                    if (role.startsWith("ROLE_")) {
+                        authorities.add(new SimpleGrantedAuthority(role));
+                    } else if (role.equals("ADMIN") || role.equals("USER")) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                    } else {
+                        authorities.add(new SimpleGrantedAuthority(role));
                     }
-                    authorities.add(new SimpleGrantedAuthority(role));
                 }
             }
             return authorities;

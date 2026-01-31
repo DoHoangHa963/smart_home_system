@@ -9,12 +9,15 @@ import com.example.smart_home_system.enums.HomeMemberRole;
 import com.example.smart_home_system.exception.AppException;
 import com.example.smart_home_system.exception.ErrorCode;
 import com.example.smart_home_system.mapper.RoomMapper;
+import com.example.smart_home_system.repository.DeviceRepository;
 import com.example.smart_home_system.repository.HomeMemberRepository;
 import com.example.smart_home_system.repository.HomeRepository;
 import com.example.smart_home_system.repository.RoomRepository;
+import com.example.smart_home_system.service.EventLogService;
 import com.example.smart_home_system.service.RoomService;
 import com.example.smart_home_system.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,15 +28,46 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Implementation of {@link RoomService} for managing Room entities within homes.
+ * 
+ * <p>This service provides the core business logic for room management including:
+ * <ul>
+ *   <li>Creating rooms with home membership verification</li>
+ *   <li>Updating and deleting rooms with permission checks</li>
+ *   <li>Room search and pagination</li>
+ *   <li>Device count aggregation per room</li>
+ * </ul>
+ * 
+ * <p><b>Permission Model:</b>
+ * <ul>
+ *   <li>System ADMIN bypasses all permission checks</li>
+ *   <li>Home OWNER and ADMIN have full room access</li>
+ *   <li>Members need specific ROOM_* permissions</li>
+ *   <li>All home members can view rooms (read permission)</li>
+ * </ul>
+ * 
+ * <p><b>Deletion Rules:</b>
+ * Rooms containing devices cannot be deleted. Devices must be removed
+ * or moved to another room first.
+ * 
+ * @author Smart Home System Team
+ * @version 1.0
+ * @since 2025-01-01
+ * @see RoomService
+ */
 @Service("roomService")
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class RoomServiceImpl implements RoomService {
 
     private final RoomRepository roomRepository;
     private final HomeRepository homeRepository;
     private final HomeMemberRepository homeMemberRepository;
+    private final DeviceRepository deviceRepository;
     private final RoomMapper roomMapper;
+    private final EventLogService eventLogService;
 
     @Override
     @Transactional
@@ -55,7 +89,13 @@ public class RoomServiceImpl implements RoomService {
         Room room = roomMapper.toEntity(request);
         room.setHome(home);
 
-        return roomMapper.toResponse(roomRepository.save(room));
+        Room savedRoom = roomRepository.save(room);
+        
+        // Ghi log tạo room
+        eventLogService.logRoomEvent(home.getId(), savedRoom.getId(), "ROOM_CREATE", 
+                String.format("{\"roomName\":\"%s\"}", savedRoom.getName()), "WEB");
+
+        return roomMapper.toResponse(savedRoom);
     }
 
     @Override
@@ -75,7 +115,13 @@ public class RoomServiceImpl implements RoomService {
         }
 
         roomMapper.updateRoomFromRequest(room, request);
-        return roomMapper.toResponse(roomRepository.save(room));
+        Room updatedRoom = roomRepository.save(room);
+        
+        // Ghi log cập nhật room
+        eventLogService.logRoomEvent(updatedRoom.getHome().getId(), updatedRoom.getId(), "ROOM_UPDATE",
+                String.format("{\"roomName\":\"%s\"}", updatedRoom.getName()), "WEB");
+        
+        return roomMapper.toResponse(updatedRoom);
     }
 
     @Override
@@ -88,10 +134,19 @@ public class RoomServiceImpl implements RoomService {
 
         validateWritePermission(room.getHome().getId(), currentUserId);
 
-        // Check if room has devices
-        if (!room.getDevices().isEmpty()) {
+        // Check if room has active devices (chưa bị xóa mềm)
+        long deviceCount = deviceRepository.countByRoomId(roomId);
+        if (deviceCount > 0) {
             throw new AppException(ErrorCode.ROOM_HAS_DEVICES);
         }
+
+        // Bỏ liên kết phòng khỏi mọi thiết bị (kể cả đã xóa mềm) trước khi xóa phòng,
+        // tránh cascade xóa device và lỗi FK từ event_logs.device_id.
+        deviceRepository.unlinkDevicesByRoomId(roomId);
+
+        // Ghi log trước khi xóa
+        eventLogService.logRoomEvent(room.getHome().getId(), room.getId(), "ROOM_DELETE",
+                String.format("{\"roomName\":\"%s\"}", room.getName()), "WEB");
 
         roomRepository.delete(room);
     }
@@ -107,7 +162,8 @@ public class RoomServiceImpl implements RoomService {
         validateReadPermission(room.getHome().getId(), currentUserId);
 
         RoomResponse response = roomMapper.toResponse(room);
-        response.setDeviceCount(room.getDevices().size());
+        // Đếm chỉ các device chưa bị xóa mềm
+        response.setDeviceCount((int) deviceRepository.countByRoomId(roomId));
 
         return response;
     }
@@ -123,7 +179,8 @@ public class RoomServiceImpl implements RoomService {
         return roomRepository.findByHomeId(homeId).stream()
                 .map(room -> {
                     RoomResponse response = roomMapper.toResponse(room);
-                    response.setDeviceCount(room.getDevices().size());
+                    // Đếm chỉ các device chưa bị xóa mềm
+                    response.setDeviceCount((int) deviceRepository.countByRoomId(room.getId()));
                     return response;
                 })
                 .collect(Collectors.toList());
@@ -140,7 +197,8 @@ public class RoomServiceImpl implements RoomService {
         return roomRepository.findByHomeId(homeId, pageable)
                 .map(room -> {
                     RoomResponse response = roomMapper.toResponse(room);
-                    response.setDeviceCount(room.getDevices().size());
+                    // Đếm chỉ các device chưa bị xóa mềm
+                    response.setDeviceCount((int) deviceRepository.countByRoomId(room.getId()));
                     return response;
                 });
     }
@@ -162,7 +220,8 @@ public class RoomServiceImpl implements RoomService {
 
         return roomsPage.map(room -> {
             RoomResponse response = roomMapper.toResponse(room);
-            response.setDeviceCount(room.getDevices().size());
+            // Đếm chỉ các device chưa bị xóa mềm
+            response.setDeviceCount((int) deviceRepository.countByRoomId(room.getId()));
             return response;
         });
     }
@@ -186,13 +245,28 @@ public class RoomServiceImpl implements RoomService {
         try {
             String currentUserId = SecurityUtils.getCurrentUserId();
             Room room = roomRepository.findById(roomId)
-                    .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+                    .orElse(null);
+            
+            if (room == null) {
+                return false;
+            }
 
             HomeMember member = homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId)
-                    .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
+                    .orElse(null);
+            
+            if (member == null) {
+                return false;
+            }
 
-            return member.getRole() == HomeMemberRole.OWNER || member.getRole() == HomeMemberRole.ADMIN;
+            // OWNER và ADMIN luôn có quyền
+            if (member.getRole() == HomeMemberRole.OWNER || member.getRole() == HomeMemberRole.ADMIN) {
+                return true;
+            }
+
+            // Check permission riêng lẻ (ROOM_UPDATE hoặc ROOM_DELETE tùy context)
+            return member.hasPermission("ROOM_UPDATE") || member.hasPermission("ROOM_DELETE");
         } catch (Exception e) {
+            log.warn("Error checking room write permission: {}", e.getMessage());
             return false;
         }
     }
@@ -201,14 +275,33 @@ public class RoomServiceImpl implements RoomService {
     public boolean hasRoomPermission(Long roomId, String permission) {
         try {
             String currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId == null) {
+                return false;
+            }
+
             Room room = roomRepository.findById(roomId)
-                    .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+                    .orElse(null);
+            
+            if (room == null) {
+                return false;
+            }
 
             HomeMember member = homeMemberRepository.findByHomeIdAndUserId(room.getHome().getId(), currentUserId)
-                    .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
+                    .orElse(null);
+            
+            if (member == null) {
+                return false;
+            }
 
+            // OWNER luôn có tất cả permissions
+            if (member.getRole() == HomeMemberRole.OWNER) {
+                return true;
+            }
+
+            // Check permission riêng lẻ (bao gồm cả custom permissions)
             return member.hasPermission(permission);
         } catch (Exception e) {
+            log.warn("Error checking room permission {} for room {}: {}", permission, roomId, e.getMessage());
             return false;
         }
     }
@@ -256,7 +349,8 @@ public class RoomServiceImpl implements RoomService {
         validateReadPermission(room.getHome().getId(), currentUserId);
 
         RoomResponse response = roomMapper.toResponse(room);
-        response.setDeviceCount(room.getDevices().size());
+        // Đếm chỉ các device chưa bị xóa mềm
+        response.setDeviceCount((int) deviceRepository.countByRoomId(roomId));
 
         // Additional statistics can be added here
         // Example: device count by type, etc.
@@ -276,7 +370,7 @@ public class RoomServiceImpl implements RoomService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
-    // Helper method to check write permission (OWNER or ADMIN only)
+    // Helper method to check write permission (OWNER, ADMIN, or có ROOM_CREATE/ROOM_UPDATE permission)
     private void validateWritePermission(Long homeId, String userId) {
         // 1. Nếu là System Admin -> Cho phép luôn
         if (isSystemAdmin()) {
@@ -286,8 +380,13 @@ public class RoomServiceImpl implements RoomService {
         HomeMember member = homeMemberRepository.findByHomeIdAndUserId(homeId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.HOME_ACCESS_DENIED));
 
-        // Only OWNER or ADMIN (Home Level) can create/modify rooms
-        if (member.getRole() != HomeMemberRole.OWNER && member.getRole() != HomeMemberRole.ADMIN) {
+        // OWNER và ADMIN luôn có quyền
+        if (member.getRole() == HomeMemberRole.OWNER || member.getRole() == HomeMemberRole.ADMIN) {
+            return;
+        }
+
+        // Check permission riêng lẻ
+        if (!member.hasPermission("ROOM_CREATE") && !member.hasPermission("ROOM_UPDATE")) {
             throw new AppException(ErrorCode.INSUFFICIENT_PERMISSIONS);
         }
     }

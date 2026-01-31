@@ -22,11 +22,22 @@ public class DeviceCreateRequest {
     @NotNull(message = "DEVICETYPE_REQUIRED")
     private DeviceType deviceType;
 
-    @NotNull(message = "ROOMID_REQUIRED")
+    /**
+     * Room ID - Optional. Some devices like main door don't belong to a specific room.
+     * If null, device will be created without a room assignment.
+     */
     private Long roomId;
 
     @NotNull(message = "HOMEID_REQUIRED")
     private Long homeId;
+
+    /**
+     * GPIO pin number trên ESP32 để điều khiển thiết bị
+     * Giống như Virtual Pin trong Blynk
+     * Ví dụ: 42 = PIN_RELAY_LIGHT, 21 = PIN_RELAY_FAN, 18 = PIN_SERVO
+     * Có thể null nếu device là sensor (không điều khiển được)
+     */
+    private Integer gpioPin;
 
     private String metadata;
 }

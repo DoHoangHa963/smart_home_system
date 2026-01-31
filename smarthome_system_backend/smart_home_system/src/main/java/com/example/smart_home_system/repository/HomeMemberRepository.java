@@ -3,6 +3,7 @@ package com.example.smart_home_system.repository;
 import com.example.smart_home_system.entity.HomeMember;
 import com.example.smart_home_system.enums.HomeMemberRole;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -26,9 +27,10 @@ public interface HomeMemberRepository extends JpaRepository<HomeMember, Long> {
     Optional<HomeMember> findByHomeIdAndUserIdWithUser(@Param("homeId") Long homeId, @Param("userId") String userId);
 
     @Query("SELECT hm FROM HomeMember hm " +
-            "JOIN FETCH hm.user " +  // FETCH user
-            "WHERE hm.home.id = :homeId AND hm.user.username = :username")
-    Optional<HomeMember> findByHomeIdAndUsernameWithUser(@Param("homeId") Long homeId, @Param("username") String username);
+            "JOIN FETCH hm.user u " +
+            "WHERE hm.home.id = :homeId AND u.username = :username")
+    Optional<HomeMember> findByHomeIdAndUsernameWithUser(@Param("homeId") Long homeId,
+                                                         @Param("username") String username);
 
     // Sửa lỗi: Optional<Object> → Optional<HomeMember>
     @Query("SELECT hm FROM HomeMember hm " +
@@ -69,8 +71,24 @@ public interface HomeMemberRepository extends JpaRepository<HomeMember, Long> {
 
     // Kiểm tra xem User có phải là thành viên của nhà này với Role cụ thể không (VD: OWNER)
     boolean existsByUserUsernameAndHomeIdAndRole(String username, Long homeId, HomeMemberRole role);
+    
+    // Kiểm tra xem User có phải là Owner của nhà này không (tối ưu với exists query)
+    @Query("SELECT COUNT(hm) > 0 FROM HomeMember hm " +
+            "WHERE hm.home.id = :homeId AND hm.user.id = :userId AND hm.role = :role")
+    boolean existsByHomeIdAndUserIdAndRole(
+            @Param("homeId") Long homeId,
+            @Param("userId") String userId,
+            @Param("role") HomeMemberRole role
+    );
 
     @Query("SELECT COUNT(hm) FROM HomeMember hm " +
             "WHERE hm.home.id = :homeId AND hm.status = 'ACTIVE'")
     int countByHomeId(@Param("homeId") Long homeId);
+
+    @Modifying
+    @Query("UPDATE HomeMember hm SET hm.permissions = :permissions WHERE hm.home.id = :homeId AND hm.user.id = :userId")
+    void updatePermissions(@Param("homeId") Long homeId,
+                          @Param("userId") String userId,
+                          @Param("permissions") String permissions);
+
 }
