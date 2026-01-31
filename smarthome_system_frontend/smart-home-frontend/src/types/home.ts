@@ -55,6 +55,7 @@ export interface HomeMemberResponse {
   role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'GUEST';
   status: 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'REJECTED';
   joinedAt?: string;
+  permissions?: string[];
 }
 
 export interface AddMemberRequest {
@@ -80,3 +81,33 @@ export interface HomeWithMember {
   home: Home;
   currentMember: HomeMember;
 }
+
+export const getMemberPermissions = (member: HomeMemberResponse): string[] => {
+  if (!member.permissions) return [];
+  
+  if (Array.isArray(member.permissions)) {
+    return member.permissions;
+  }
+  
+  try {
+    return JSON.parse(member.permissions);
+  } catch {
+    return [];
+  }
+};
+
+export const transformMemberResponse = (response: HomeMemberResponse): HomeMember => {
+  return {
+    ...response,
+    permissions: JSON.stringify(response.permissions || []), // Chuyển mảng thành JSON string
+  };
+};
+
+// Helper function để parse permissions từ string
+export const parseMemberPermissions = (member: HomeMember): string[] => {
+  try {
+    return JSON.parse(member.permissions || '[]');
+  } catch {
+    return [];
+  }
+};

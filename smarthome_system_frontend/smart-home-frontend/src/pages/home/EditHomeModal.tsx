@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Home } from 'lucide-react';
 import { toast } from 'sonner';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 interface EditHomeModalProps {
   open: boolean;
@@ -157,8 +158,7 @@ export default function EditHomeModal({ open, onClose, home, onSuccess }: EditHo
       onSuccess(updatedHome);
       toast.success('Cập nhật thông tin nhà thành công!');
     } catch (error: any) {
-      console.error('Update home error:', error);
-      toast.error(`Không thể cập nhật nhà: ${error.message || 'Có lỗi xảy ra'}`);
+      toast.error(getUserFriendlyError(error));
     } finally {
       setIsSubmitting(false);
     }

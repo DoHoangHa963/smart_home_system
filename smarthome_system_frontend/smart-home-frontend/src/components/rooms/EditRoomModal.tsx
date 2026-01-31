@@ -14,6 +14,7 @@ import { useUpdateRoom } from '@/hooks/useRoom';
 import { RoomResponse } from '@/types/room';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { validateRoomName } from '@/lib/validation/room.validation';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 interface EditRoomModalProps {
   room: RoomResponse;
@@ -68,11 +69,7 @@ export default function EditRoomModal({ room, open, onOpenChange }: EditRoomModa
       
       onOpenChange(false);
     } catch (err: any) {
-      // Xử lý lỗi từ API
-      const errorMessage = err.response?.data?.message || 
-                          err.message || 
-                          'Không thể cập nhật phòng. Vui lòng thử lại.';
-      setApiError(errorMessage);
+      setApiError(getUserFriendlyError(err));
     }
   };
 

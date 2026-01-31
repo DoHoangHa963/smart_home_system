@@ -35,9 +35,47 @@ import {
 import { RoomResponse } from '@/types/room';
 import { deviceApi } from '@/lib/api/device.api';
 import { useDeleteRoom } from '@/hooks/useRoom';
-import { useDeviceStore } from '@/store/deviceStore';
 import { useDeviceDetection } from '@/hooks/useDeviceDetection';
 import EditRoomModal from './EditRoomModal';
+import { usePermission } from '@/hooks/usePermission';
+import { HOME_PERMISSIONS } from '@/types/permission';
+import { toast } from 'sonner';
+import { AxiosError } from 'axios';
+
+/** Lấy thông báo lỗi thân thiện từ Axios error (xóa phòng, API rooms) */
+function getDeleteRoomErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'Không thể xóa phòng. Vui lòng thử lại.';
+  const axiosError = error as AxiosError<{ message?: string; code?: number; detail?: string }>;
+  const status = axiosError.response?.status;
+  const data = axiosError.response?.data;
+  const msg = data?.message ?? '';
+
+  if (status === 409) {
+    // ROOM_HAS_DEVICES (5031) hoặc message chứa "room"/"devices"
+    if (data?.code === 5031 || /room|devices|cannot delete/i.test(msg)) {
+      return 'Không thể xóa phòng đang chứa thiết bị. Vui lòng chuyển hoặc xóa thiết bị trước.';
+    }
+    return msg || 'Phòng đang có xung đột, không thể xóa.';
+  }
+  if (status === 404) return 'Phòng không tồn tại hoặc đã bị xóa.';
+  if (status === 403) return 'Bạn không có quyền xóa phòng này.';
+  if (status === 401) return 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+
+  if (!axiosError.response) {
+    if (axiosError.code === 'ERR_NETWORK' || axiosError.message?.includes('Network Error')) {
+      return 'Mất kết nối mạng. Vui lòng kiểm tra kết nối và thử lại.';
+    }
+    if (axiosError.code === 'ECONNABORTED' || axiosError.message?.includes('timeout')) {
+      return 'Yêu cầu quá thời gian. Vui lòng thử lại.';
+    }
+    if (axiosError.code === 'ERR_CONNECTION_RESET' || axiosError.code === 'ECONNRESET') {
+      return 'Kết nối bị ngắt. Vui lòng kiểm tra server và thử lại.';
+    }
+    return 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
+  }
+
+  return msg || 'Không thể xóa phòng. Vui lòng thử lại.';
+}
 
 interface RoomCardProps {
   room: RoomResponse;
@@ -46,10 +84,9 @@ interface RoomCardProps {
 }
 
 const RoomDeviceList = ({ roomId }: { roomId: number }) => {
-  const { controlDevice } = useDeviceStore();
   const { isMobile } = useDeviceDetection();
 
-  const { data: devices = [], isLoading, refetch } = useQuery({
+  const { data: devices = [], isLoading } = useQuery({
     queryKey: ['room-devices', roomId],
     queryFn: async () => {
       try {
@@ -69,15 +106,6 @@ const RoomDeviceList = ({ roomId }: { roomId: number }) => {
     },
     staleTime: 1000 * 60,
   });
-
-  const handleToggle = async (deviceId: number) => {
-    try {
-      await controlDevice(deviceId, 'TOGGLE');
-      refetch();
-    } catch (e) { 
-      console.error(e); 
-    }
-  };
 
   if (isLoading) {
     return (
@@ -115,16 +143,6 @@ const RoomDeviceList = ({ roomId }: { roomId: number }) => {
             <Badge variant="outline" className="text-[10px] h-5 px-1 hidden sm:inline-flex">
               {device.type}
             </Badge>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className={`h-8 w-8 ${isMobile ? 'h-10 w-10' : 'h-8 w-8'} hover:bg-white/50`}
-              onClick={() => handleToggle(device.id)}
-            >
-              <Power className={`h-4 w-4 ${
-                ['ON', 'on', true].includes(device.status) ? 'text-primary' : ''
-              }`} />
-            </Button>
           </div>
         </div>
       ))}
@@ -137,6 +155,9 @@ export default function RoomCard({ room, isExpanded, onToggle }: RoomCardProps) 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { isMobile, isTablet } = useDeviceDetection();
+  const { can, isAdmin } = usePermission();
+  const canEditRoom = isAdmin || can(HOME_PERMISSIONS.ROOM_UPDATE);
+  const canDeleteRoom = isAdmin || can(HOME_PERMISSIONS.ROOM_DELETE);
 
   const handleDelete = async () => {
     try {
@@ -144,8 +165,11 @@ export default function RoomCard({ room, isExpanded, onToggle }: RoomCardProps) 
         roomId: room.id,
         homeId: room.homeId
       });
+      toast.success('Đã xóa phòng thành công.');
+      setIsDeleteDialogOpen(false);
     } catch (error) {
-      console.error('Failed to delete room:', error);
+      const message = getDeleteRoomErrorMessage(error);
+      toast.error(message);
     }
   };
 
@@ -158,17 +182,21 @@ export default function RoomCard({ room, isExpanded, onToggle }: RoomCardProps) 
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
+        {canEditRoom && (
+          <DropdownMenuItem onClick={() => setIsEditOpen(true)}>
           <Edit2 className="h-4 w-4 mr-2" />
           Chỉnh sửa
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={() => setIsDeleteDialogOpen(true)}
-          className="text-red-600"
-        >
-          <Trash2 className="h-4 w-4 mr-2" />
-          Xóa phòng
-        </DropdownMenuItem>
+          </DropdownMenuItem>
+        )}
+        {canDeleteRoom && (
+          <DropdownMenuItem 
+            onClick={() => setIsDeleteDialogOpen(true)}
+            className="text-red-600"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Xóa phòng
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -180,7 +208,14 @@ export default function RoomCard({ room, isExpanded, onToggle }: RoomCardProps) 
         variant="ghost" 
         size="icon" 
         className="h-8 w-8 text-muted-foreground hover:text-primary"
-        onClick={() => setIsEditOpen(true)}
+        onClick={() => {
+          if (!canEditRoom) {
+            toast.error('Bạn không có quyền chỉnh sửa phòng');
+            return;
+          }
+          setIsEditOpen(true);
+        }}
+        disabled={!canEditRoom}
       >
         <Edit2 className="h-4 w-4" />
       </Button>
@@ -188,8 +223,14 @@ export default function RoomCard({ room, isExpanded, onToggle }: RoomCardProps) 
         variant="ghost" 
         size="icon" 
         className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600"
-        disabled={deleteRoomMutation.isPending}
-        onClick={() => setIsDeleteDialogOpen(true)}
+        disabled={deleteRoomMutation.isPending || !canDeleteRoom}
+        onClick={() => {
+          if (!canDeleteRoom) {
+            toast.error('Bạn không có quyền xóa phòng');
+            return;
+          }
+          setIsDeleteDialogOpen(true);
+        }}
       >
         {deleteRoomMutation.isPending ? (
           <Loader2 className="h-4 w-4 animate-spin" />

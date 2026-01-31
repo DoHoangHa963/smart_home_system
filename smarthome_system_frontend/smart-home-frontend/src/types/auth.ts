@@ -1,13 +1,4 @@
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  phone?: string;
-  avatarUrl?: string;
-  status: string;
-
-  roles: string[];
-}
+import type { User } from '@/types/user';
 
 export interface AuthResponseData {
   accessToken: string;
@@ -24,18 +15,6 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
-export interface Role {
-  id: number;
-  name: 'ADMIN' | 'USER';
-  description?: string;
-}
-
-export interface LoginResponse {
-  token: string;
-  refreshToken: string;
-  user: User;
-}
-
 export interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -43,6 +22,7 @@ export interface AuthState {
   setTokens: (accessToken: string, refreshToken: string) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (data: LoginResponse) => void;
+  login: (data: AuthResponseData) => void;
+  updateUser: (user: User) => void;
   logout: () => void;
 }

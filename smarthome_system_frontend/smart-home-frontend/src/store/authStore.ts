@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { AuthState, User } from '@/types/auth';
+import { AuthState, AuthResponseData } from '@/types/auth';
+import type { User } from '@/types/user';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -11,13 +12,19 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
 
-      login: (data: any) => {
+      login: (data: AuthResponseData) => {
         set({ 
           user: data.user, 
           accessToken: data.accessToken, 
           refreshToken: data.refreshToken,
           isAuthenticated: true 
         });
+      },
+
+      updateUser: (updatedUser: User) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, ...updatedUser } : updatedUser
+        }));
       },
 
       setTokens: (accessToken: string, refreshToken: string) => {
