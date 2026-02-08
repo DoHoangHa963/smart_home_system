@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Home, HomeMember } from '@/types/home';
+import { transformMemberResponse, type Home, type HomeMember, type HomeMemberResponse } from '@/types/home';
 import { homeApi } from '@/lib/api/home.api';
 import { toast } from 'sonner';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 const extractData = (data: any) => {
   if (data?.content && Array.isArray(data.content)) {
@@ -14,10 +15,26 @@ const extractData = (data: any) => {
   return [];
 };
 
+const transformMembersData = (data: HomeMemberResponse[]): HomeMember[] => {
+  return data.map(transformMemberResponse);
+};
+
 const getErrorMessage = (error: any, defaultMsg: string) => {
-  return error.response?.data?.detail || 
-         error.response?.data?.message || 
-         defaultMsg;
+  // Sử dụng getUserFriendlyError để đảm bảo tất cả message đều là tiếng Việt
+  return getUserFriendlyError(error) || defaultMsg;
+};
+
+const createMockMemberFromUser = (user: any, homeId: number): HomeMember => {
+  return {
+    id: 0,
+    userId: user?.id || user?.userId,
+    username: user?.username || 'User',
+    email: user?.email || '',
+    role: 'MEMBER',
+    status: 'ACTIVE',
+    permissions: '[]', // JSON string
+    joinedAt: new Date().toISOString()
+  };
 };
 
 interface HomeState {
@@ -68,16 +85,23 @@ export const useHomeStore = create<HomeState>()(
           const homesArray = extractData(response.data);
           set({ homes: homesArray, isLoading: false });
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to fetch homes');
+          const errorMsg = getErrorMessage(error, 'Không thể tải danh sách nhà');
           set({ error: errorMsg, isLoading: false });
         }
       },
 
+      // Trong homeStore.ts, cần sửa phần setCurrentHome
       setCurrentHome: async (home: Home | null, bypassPermission = false) => {
         set({ isLoading: true, error: null });
 
         if (!home) {
-          set({ currentHome: null, currentMember: null, isLoading: false });
+          set({ 
+            currentHome: null, 
+            currentMember: null, 
+            members: [],
+            isLoading: false 
+          });
+          localStorage.removeItem('currentHome');
           return;
         }
 
@@ -87,25 +111,84 @@ export const useHomeStore = create<HomeState>()(
           const userId = user?.id || user?.userId;
           const isAdmin = user?.roles?.includes('ADMIN');
 
-          // Nếu là admin và có bypassPermission
+          set({ members: [] });
+
           if (isAdmin && bypassPermission) {
-            const adminMember: Partial<HomeMember> = {
+            const adminMember: HomeMember = {
+              id: 0,
               userId: userId,
               username: user?.username || 'Administrator',
+              email: user?.email || '',
               role: 'ADMIN',
-              joinedAt: new Date().toISOString(),
+              status: 'ACTIVE',
+              permissions: '[]',
+              joinedAt: new Date().toISOString()
             };
 
             set({
               currentHome: home,
-              currentMember: adminMember as HomeMember, // Cast nếu cần
+              currentMember: adminMember,
               isLoading: false,
             });
             localStorage.setItem('currentHome', JSON.stringify(home));
             return;
           }
+
+          try {
+            console.log(`Fetching current member info for home ${home.id}...`);
+            
+            const memberResponse = await homeApi.getMyHomeMember(home.id);
+            const myMemberResponse = memberResponse.data;
+            // ✅ Transform response
+            const myMember = transformMemberResponse(myMemberResponse);
+            
+            console.log('Current member info from API /me:', myMember);
+            
+            if (myMember.role === 'OWNER' || myMember.role === 'ADMIN' || isAdmin) {
+              try {
+                const membersResponse = await homeApi.getHomeMembers(home.id);
+                const membersResponseArray = extractData(membersResponse.data);
+                const allMembers = transformMembersData(membersResponseArray);
+                set({ members: allMembers });
+              } catch (membersError) {
+                console.warn('Could not fetch all members:', membersError);
+              }
+            }
+
+            set({
+              currentHome: home,
+              currentMember: myMember, // ✅ Đã transform
+              isLoading: false,
+            });
+            
+            localStorage.setItem('currentHome', JSON.stringify(home));
+            
+          } catch (memberError: any) {
+            console.error('Error fetching current member:', memberError);
+            
+            const status = memberError.response?.status;
+            const errorDetail = memberError.response?.data?.detail || 
+                              memberError.response?.data?.message;
+            
+            if (status === 403 || status === 401) {
+              set({
+                currentHome: null,
+                currentMember: null,
+                error: 'Bạn không có quyền truy cập nhà này',
+                isLoading: false,
+              });
+            } else {
+              set({
+                currentHome: null,
+                currentMember: null,
+                error: errorDetail || 'Không thể tải thông tin thành viên',
+                isLoading: false,
+              });
+            }
+          }
+
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to set current home');
+          const errorMsg = getErrorMessage(error, 'Không thể chọn nhà');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
         }
@@ -125,7 +208,7 @@ export const useHomeStore = create<HomeState>()(
           toast.success('Tạo nhà thành công!');
           return newHome;
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to create home');
+          const errorMsg = getErrorMessage(error, 'Không thể tạo nhà');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -147,7 +230,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Cập nhật nhà thành công!');
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to update home');
+          const errorMsg = getErrorMessage(error, 'Không thể cập nhật nhà');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -168,7 +251,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Xóa nhà thành công!');
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to delete home');
+          const errorMsg = getErrorMessage(error, 'Không thể xóa nhà');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -189,7 +272,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Đã rời khỏi nhà!');
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to leave home');
+          const errorMsg = getErrorMessage(error, 'Không thể rời khỏi nhà');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -211,7 +294,7 @@ export const useHomeStore = create<HomeState>()(
 
           toast.success('Chuyển quyền sở hữu thành công!');
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to transfer ownership');
+          const errorMsg = getErrorMessage(error, 'Không thể chuyển quyền sở hữu');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -219,13 +302,21 @@ export const useHomeStore = create<HomeState>()(
       },
 
       fetchHomeMembers: async (homeId: number) => {
+        console.log('fetchHomeMembers called with homeId:', homeId);
         set({ isLoading: true, error: null });
         try {
           const response = await homeApi.getHomeMembers(homeId);
-          const membersArray = extractData(response.data);
+          console.log('API Response:', response);
+          
+          const membersResponseArray = extractData(response.data);
+          // ✅ Transform data trước khi lưu
+          const membersArray = transformMembersData(membersResponseArray);
+          
+          console.log('Transformed members array:', membersArray);
           set({ members: membersArray, isLoading: false });
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to fetch members');
+          console.error('Error fetching members:', error);
+          const errorMsg = getErrorMessage(error, 'Không thể tải danh sách thành viên');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;
@@ -240,6 +331,7 @@ export const useHomeStore = create<HomeState>()(
             role: role as any,
           });
 
+          // Sau khi thêm thành viên, fetch lại danh sách (sẽ được transform trong fetchHomeMembers)
           await get().fetchHomeMembers(homeId);
 
         } catch (error: any) {
@@ -277,16 +369,20 @@ export const useHomeStore = create<HomeState>()(
             newRole: newRole as any,
           });
 
+          // ✅ Transform response.data từ HomeMemberResponse sang HomeMember
+          const updatedMemberResponse = response.data;
+          const updatedMember = transformMemberResponse(updatedMemberResponse);
+
           set((state) => ({
             members: state.members.map((m) =>
-              m.userId === userId ? response.data : m
+              m.userId === userId ? updatedMember : m // ✅ Đã transform
             ),
             isLoading: false,
           }));
 
           toast.success('Cập nhật vai trò thành công!');
         } catch (error: any) {
-          const errorMsg = getErrorMessage(error, 'Failed to update role');
+          const errorMsg = getErrorMessage(error, 'Không thể cập nhật vai trò');
           set({ error: errorMsg, isLoading: false });
           toast.error(errorMsg);
           throw error;

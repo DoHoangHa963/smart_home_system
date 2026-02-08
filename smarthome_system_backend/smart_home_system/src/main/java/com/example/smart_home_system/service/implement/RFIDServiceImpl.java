@@ -20,11 +20,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,45 +43,25 @@ public class RFIDServiceImpl implements RFIDService {
     private final HomeRepository homeRepository;
     private final RFIDAccessLogRepository rfidAccessLogRepository;
     private final MqttService mqttService;
+    private final com.example.smart_home_system.service.MqttResponseStore mqttResponseStore;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Lấy MCU Gateway của Home và kiểm tra IP address
-     */
-    private MCUGateway getMCUGatewayWithValidIP(Long homeId) {
-        MCUGateway mcuGateway = mcuGatewayRepository.findByHomeId(homeId)
-                .orElseThrow(() -> new AppException(ErrorCode.MCU_NOT_FOUND));
-        
-        if (mcuGateway.getIpAddress() == null || mcuGateway.getIpAddress().trim().isEmpty()) {
-            throw new AppException(ErrorCode.MCU_OFFLINE);
-        }
-        
-        return mcuGateway;
-    }
-
-    /**
-     * Tạo RestClient instance
-     */
-    private RestClient createRestClient() {
-        return RestClient.create();
-    }
+    private static final int MQTT_REQUEST_TIMEOUT_SECONDS = 5;
 
     @Override
     public RFIDCardsListResponse getCardsList(Long homeId) {
-        MCUGateway mcuGateway = getMCUGatewayWithValidIP(homeId);
-        
+        mcuGatewayRepository.findByHomeId(homeId)
+                .orElseThrow(() -> new AppException(ErrorCode.MCU_NOT_FOUND));
+
         try {
-            String url = "http://" + mcuGateway.getIpAddress() + "/api/rfid/list";
-            log.debug("Getting RFID cards list from: {}", url);
-            
-            String response = createRestClient().get()
-                    .uri(url)
-                    .retrieve()
-                    .body(String.class);
-            
-            // Parse response JSON
+            String requestId = mqttResponseStore.generateRequestId();
+            java.util.concurrent.CompletableFuture<String> future = mqttResponseStore.createRequest(requestId);
+            mqttService.requestRFIDCards(homeId, requestId);
+
+            String response = mqttResponseStore.getWithTimeout(
+                    future, MQTT_REQUEST_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+
             JsonNode root = objectMapper.readTree(response);
-            
             List<RFIDCardResponse> cards = new ArrayList<>();
             JsonNode cardsNode = root.get("cards");
             if (cardsNode != null && cardsNode.isArray()) {
@@ -99,19 +76,19 @@ public class RFIDServiceImpl implements RFIDService {
                     cards.add(card);
                 }
             }
-            
+
             return RFIDCardsListResponse.builder()
                     .cards(cards)
                     .count(root.has("count") ? root.get("count").asInt() : cards.size())
                     .maxCards(root.has("maxCards") ? root.get("maxCards").asInt() : 5)
                     .learningMode(root.has("learningMode") && root.get("learningMode").asBoolean())
                     .build();
-                    
-        } catch (RestClientException e) {
-            log.error("Failed to get RFID cards from ESP32 for homeId={}: {}", homeId, e.getMessage());
+
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.error("MQTT request timeout getting RFID cards for homeId={}", homeId);
             throw new AppException(ErrorCode.MCU_CONNECTION_FAILED);
         } catch (Exception e) {
-            log.error("Error parsing RFID cards response for homeId={}: {}", homeId, e.getMessage());
+            log.error("Error getting RFID cards for homeId={}: {}", homeId, e.getMessage());
             throw new AppException(ErrorCode.INTERNAL_ERROR);
         }
     }
@@ -140,20 +117,18 @@ public class RFIDServiceImpl implements RFIDService {
 
     @Override
     public RFIDLearnStatusResponse getLearningStatus(Long homeId) {
-        MCUGateway mcuGateway = getMCUGatewayWithValidIP(homeId);
-        
+        mcuGatewayRepository.findByHomeId(homeId)
+                .orElseThrow(() -> new AppException(ErrorCode.MCU_NOT_FOUND));
+
         try {
-            String url = "http://" + mcuGateway.getIpAddress() + "/api/rfid/learn/status";
-            log.debug("Getting RFID learning status from: {}", url);
-            
-            String response = createRestClient().get()
-                    .uri(url)
-                    .retrieve()
-                    .body(String.class);
-            
-            // Parse response
+            String requestId = mqttResponseStore.generateRequestId();
+            java.util.concurrent.CompletableFuture<String> future = mqttResponseStore.createRequest(requestId);
+            mqttService.requestRFIDLearnStatus(homeId, requestId);
+
+            String response = mqttResponseStore.getWithTimeout(
+                    future, MQTT_REQUEST_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+
             JsonNode root = objectMapper.readTree(response);
-            
             return RFIDLearnStatusResponse.builder()
                     .learningMode(root.has("learningMode") && root.get("learningMode").asBoolean())
                     .complete(root.has("complete") && root.get("complete").asBoolean())
@@ -161,9 +136,9 @@ public class RFIDServiceImpl implements RFIDService {
                     .result(root.has("result") ? root.get("result").asText() : null)
                     .cardCount(root.has("cardCount") ? root.get("cardCount").asInt() : null)
                     .build();
-                    
-        } catch (RestClientException e) {
-            log.error("Failed to get RFID learning status from ESP32 for homeId={}: {}", homeId, e.getMessage());
+
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.error("MQTT request timeout getting RFID learn status for homeId={}", homeId);
             throw new AppException(ErrorCode.MCU_CONNECTION_FAILED);
         } catch (Exception e) {
             log.error("Error getting RFID learning status for homeId={}: {}", homeId, e.getMessage());
@@ -208,33 +183,6 @@ public class RFIDServiceImpl implements RFIDService {
         mqttService.clearRFIDCards(homeId);
         
         log.info("RFID clear all cards command sent successfully for homeId={}", homeId);
-    }
-
-    // UNUSED: clearAllCards fallback code removed
-    @SuppressWarnings("unused")
-    private void clearAllCardsHTTPFallback(Long homeId) {
-        MCUGateway mcuGateway = getMCUGatewayWithValidIP(homeId);
-        
-        try {
-            String url = "http://" + mcuGateway.getIpAddress() + "/api/rfid/clear";
-            log.info("[HTTP FALLBACK] Clearing all RFID cards on ESP32 for homeId={}", homeId);
-            
-            createRestClient().post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body("{}")
-                    .retrieve()
-                    .body(String.class);
-            
-            log.info("All RFID cards cleared successfully for homeId={}", homeId);
-                    
-        } catch (RestClientException e) {
-            log.error("Failed to clear RFID cards on ESP32 for homeId={}: {}", homeId, e.getMessage());
-            throw new AppException(ErrorCode.MCU_CONNECTION_FAILED);
-        } catch (Exception e) {
-            log.error("Error clearing RFID cards for homeId={}: {}", homeId, e.getMessage());
-            throw new AppException(ErrorCode.INTERNAL_ERROR);
-        }
     }
 
     @Override

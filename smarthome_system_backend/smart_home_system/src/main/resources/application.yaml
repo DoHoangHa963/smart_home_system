@@ -6,6 +6,8 @@ server:
 
 app:
   base-url: http://localhost:8080
+  mcu:
+    heartbeat-check-interval-ms: 120000  # 2 phút: đánh dấu MCU offline nếu không có heartbeat/LWT
 
 spring:
   datasource:
@@ -84,7 +86,7 @@ file:
   allowed-extensions: jpg,jpeg,png,gif
 
 mqtt:
-  broker-url: tcp://192.168.0.198:1883
+  broker-url: tcp://192.168.0.200:1883
   client-id: smarthome-backend
   username: ""  # Leave empty for no auth
   password: ""

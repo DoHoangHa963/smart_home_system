@@ -1,11 +1,14 @@
 package com.example.smart_home_system.repository;
 
 import com.example.smart_home_system.entity.MCUGateway;
+import com.example.smart_home_system.enums.MCUStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -66,4 +69,7 @@ public interface MCUGatewayRepository extends JpaRepository<MCUGateway, Long> {
      */
     @Query("SELECT m FROM MCUGateway m WHERE m.serialNumber = :serialNumber AND m.status = 'PAIRING'")
     Optional<MCUGateway> findPairingBySerialNumber(@Param("serialNumber") String serialNumber);
+
+    /** MCU đang ONLINE nhưng lastHeartbeat cũ hơn ngưỡng → đánh dấu offline (khi LWT không kịp phát). */
+    List<MCUGateway> findByStatusAndLastHeartbeatBefore(MCUStatus status, LocalDateTime lastHeartbeatBefore);
 }

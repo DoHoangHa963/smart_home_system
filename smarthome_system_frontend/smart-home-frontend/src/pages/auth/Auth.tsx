@@ -6,6 +6,8 @@ import * as z from 'zod';
 
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import type { ApiResponse, AuthResponseData } from '@/types/auth';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,18 +80,11 @@ export default function AuthPage() {
       // Backend expects: { username, email, password }
       const { confirmPassword, ...payload } = values;
 
-      const res = await api.post(url, payload);
-      const data = res.data;
-
-      // Note: Adjust this check based on your actual API wrapper response
-      // If your API returns raw data directly, you might check res.status instead
-      if (data.code !== 1000 && !data.result) { 
-         // Assuming standard structure, modify if your wrapper is different
-      }
+      const res = await api.post<ApiResponse<AuthResponseData>>(url, payload);
+      const apiResponse = res.data;
 
       if (mode === 'login') {
-        // Map backend response to store (adjust 'data.result' if your wrapper uses that)
-        login(data.result || data.data); 
+        login(apiResponse.data);
         toast.success('Đăng nhập thành công');
         navigate('/dashboard', { replace: true });
       } else {
@@ -98,11 +93,7 @@ export default function AuthPage() {
         form.reset();
       }
     } catch (error: any) {
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          'Có lỗi xảy ra'
-      );
+      toast.error(getUserFriendlyError(error));
     } finally {
       setLoading(false);
     }

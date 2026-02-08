@@ -22,6 +22,7 @@ import {
 import { Home } from 'lucide-react';
 import type { Home as HomeType } from '@/types/home';
 import { toast } from 'sonner';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 interface CreateHomeModalProps {
   open: boolean;
@@ -145,8 +146,7 @@ export default function CreateHomeModal({ open, onClose, onSuccess }: CreateHome
       toast.success('Tạo nhà thành công!');
       onClose();
     } catch (error: any) {
-      console.error('Failed to create home:', error);
-      toast.error(error.message || 'Không thể tạo nhà. Vui lòng thử lại.');
+      toast.error(getUserFriendlyError(error));
     }
   };
 

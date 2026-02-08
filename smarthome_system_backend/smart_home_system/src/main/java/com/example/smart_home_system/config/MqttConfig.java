@@ -103,14 +103,15 @@ public class MqttConfig {
      */
     @Bean
     public MessageProducer inboundAdapter() {
-        MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter(
+        MqttPahoMessageDrivenChannelAdapter         adapter = new MqttPahoMessageDrivenChannelAdapter(
                 clientId + "-inbound",
                 mqttClientFactory(),
                 "smarthome/+/sensors",
                 "smarthome/+/rfid/#",
                 "smarthome/+/status",
                 "smarthome/+/device-status",
-                "smarthome/+/commands/ack");
+                "smarthome/+/commands/ack",
+                "smarthome/+/gpio/#");
         adapter.setCompletionTimeout(5000);
         adapter.setConverter(new DefaultPahoMessageConverter());
         adapter.setQos(defaultQos);
@@ -123,6 +124,7 @@ public class MqttConfig {
         log.info("[MQTT]    - smarthome/+/status");
         log.info("[MQTT]    - smarthome/+/device-status");
         log.info("[MQTT]    - smarthome/+/commands/ack");
+        log.info("[MQTT]    - smarthome/+/gpio/#");
         log.warn("[MQTT] ⚠️  If you don't see '[MQTT] ✅ Received message' logs, check:");
         log.warn("[MQTT]    1. MQTT broker is running (mosquitto on port 1883)");
         log.warn("[MQTT]    2. ESP32 is connected to MQTT broker");
