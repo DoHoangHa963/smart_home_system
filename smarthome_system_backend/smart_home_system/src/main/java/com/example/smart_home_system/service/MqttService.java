@@ -82,4 +82,31 @@ public interface MqttService {
      * @param enabled Enable/disable card (null to keep current)
      */
     void updateRFIDCard(Long homeId, int cardIndex, String name, Boolean enabled);
+
+    /**
+     * Publish pairing credentials to ESP32 via MQTT (replaces HTTP send-api-key)
+     * ESP32 subscribes to smarthome/pairing/{serialNumber} when in pairing mode
+     */
+    void publishPairingCredentials(String serialNumber, String apiKey, long mcuGatewayId, long homeId);
+
+    /**
+     * Request RFID cards list from ESP32 via MQTT.
+     * Publishes RFID_REQUEST_CARDS to rfid/commands. ESP32 responds to rfid/cards with requestId.
+     * 
+     * @param homeId Home ID
+     * @param requestId Correlation ID for response
+     */
+    void requestRFIDCards(Long homeId, String requestId);
+
+    /**
+     * Request RFID learning status from ESP32 via MQTT.
+     * Publishes RFID_REQUEST_LEARN_STATUS to rfid/commands. ESP32 responds to rfid/learn/status with requestId.
+     */
+    void requestRFIDLearnStatus(Long homeId, String requestId);
+
+    /**
+     * Request GPIO available pins from ESP32 via MQTT.
+     * Publishes REQUEST_GPIO_AVAILABLE to commands. ESP32 responds to gpio/available with requestId.
+     */
+    void requestGPIOAvailable(Long homeId, String requestId);
 }

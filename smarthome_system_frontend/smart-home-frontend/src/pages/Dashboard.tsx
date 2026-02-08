@@ -290,33 +290,28 @@ export default function Dashboard() {
     }
   }, [currentHome?.id]);
 
-  // Auto-refresh statistics and recent activities định kỳ
+  // Fallback refresh (realtime chủ yếu qua WebSocket: sensors, status, device-status)
+  // Chỉ poll thống kê + hoạt động mỗi 5 phút (khi thay đổi từ nguồn khác, VD thêm thiết bị từ tab khác)
   useEffect(() => {
     if (!currentHome || !can(HOME_PERMISSIONS.HOME_LOGS_VIEW)) return;
 
-    // Refresh ngay lập tức lần đầu (đã được load ở useEffect trên, nhưng đảm bảo)
-    // Tạo interval để tự động refresh mỗi 30 giây
+    const FALLBACK_INTERVAL_MS = 5 * 60 * 1000; // 5 phút
+    const SENSOR_POLL_THRESHOLD_MS = 60 * 1000; // 1 phút không có WS data thì poll sensor
+
     const refreshInterval = setInterval(() => {
       loadStatistics();
       loadRecentActivities();
-      
+
       // Polling fallback cho sensor data nếu WebSocket không hoạt động
-      // Chỉ poll nếu không nhận được WebSocket data trong 1 phút
       const lastWsTime = lastWebSocketDataTimeRef.current;
       const mcuStatus = mcuStatusRef.current;
-      
       if (lastWsTime) {
         const timeSinceLastData = Date.now() - lastWsTime;
-        const pollingThreshold = 60 * 1000; // 1 phút
-        if (timeSinceLastData > pollingThreshold) {
-          // WebSocket có vẻ không hoạt động, dùng polling
-          loadSensorData();
-        }
+        if (timeSinceLastData > SENSOR_POLL_THRESHOLD_MS) loadSensorData();
       } else if (mcuStatus?.hasMCU && mcuStatus?.isOnline) {
-        // Có MCU nhưng chưa có WebSocket data, dùng polling
         loadSensorData();
       }
-    }, 30000); // 30 giây
+    }, FALLBACK_INTERVAL_MS);
 
     return () => clearInterval(refreshInterval);
   }, [currentHome?.id]);
@@ -502,9 +497,18 @@ export default function Dashboard() {
       }
     });
 
+    // Subscribe to device-status: realtime thống kê thiết bị + hoạt động gần đây
+    const deviceStatusTopic = `/topic/home/${currentHome.id}/device-status`;
+    const deviceStatusSubId = webSocketService.subscribe(deviceStatusTopic, () => {
+      console.log('[WebSocket] Received device-status update, refreshing statistics and activities');
+      loadStatistics();
+      loadRecentActivities();
+    });
+
     return () => {
       webSocketService.unsubscribe(subId);
       webSocketService.unsubscribe(statusSubId);
+      webSocketService.unsubscribe(deviceStatusSubId);
       // Optional: deactivate if no other components use it
       // webSocketService.deactivate(); 
     };

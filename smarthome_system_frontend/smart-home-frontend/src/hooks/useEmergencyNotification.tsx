@@ -10,6 +10,8 @@ export interface EmergencyNotification {
   fire?: boolean;
   gas?: boolean;
   timestamp: number;
+  /** Mô tả cụ thể loại khẩn cấp đã giải quyết (từ backend) */
+  resolvedTypeLabel?: string;
 }
 
 export function useEmergencyNotification() {
@@ -78,9 +80,10 @@ export function useEmergencyNotification() {
             icon: <AlertTriangle className="h-5 w-5" />,
           });
         } else {
-          // Emergency cleared
-          toast.success('✅ Tình huống khẩn cấp đã được giải quyết', {
-            description: 'Hệ thống đã trở về trạng thái bình thường.',
+          // Emergency cleared - dùng mô tả cụ thể nếu có
+          const resolvedLabel = emergencyData.resolvedTypeLabel || 'Tình huống khẩn cấp';
+          toast.success('✅ Đã được giải quyết', {
+            description: `${resolvedLabel} đã được xác nhận an toàn. Hệ thống đã trở về trạng thái bình thường.`,
             duration: 5000,
           });
         }

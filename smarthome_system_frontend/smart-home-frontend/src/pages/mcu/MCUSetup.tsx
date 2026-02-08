@@ -30,12 +30,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { 
-  Cpu, 
-  Wifi, 
-  WifiOff, 
-  Home as HomeIcon, 
-  ArrowLeft, 
+import {
+  Cpu,
+  Wifi,
+  WifiOff,
+  Home as HomeIcon,
+  ArrowLeft,
   ArrowRight,
   Check,
   Loader2,
@@ -44,7 +44,8 @@ import {
   Link2,
   Unlink,
   QrCode,
-  Signal
+  Signal,
+  Edit
 } from 'lucide-react';
 import type { MCUGateway, MCUPairingInitResponse } from '@/types/mcu';
 
@@ -80,13 +81,13 @@ function SendApiKeyToESP32({ apiKey, mcuGatewayId, homeId, defaultIpAddress }: S
         mcuGatewayId,
         homeId
       );
-      
+
       setSendSuccess(true);
       toast.success('Đã gửi API Key đến ESP32 thành công!');
     } catch (error: any) {
       console.error('Error sending API key to ESP32:', error);
-      const errorMsg = error.response?.data?.message || 
-                      'Lỗi kết nối: Đảm bảo bạn đang trong cùng mạng WiFi với ESP32';
+      const errorMsg = error.response?.data?.message ||
+        'Lỗi kết nối: Đảm bảo bạn đang trong cùng mạng WiFi với ESP32';
       toast.error(errorMsg);
     } finally {
       setIsSending(false);
@@ -135,7 +136,7 @@ function SendApiKeyToESP32({ apiKey, mcuGatewayId, homeId, defaultIpAddress }: S
           onChange={(e) => setEsp32IpAddress(e.target.value)}
           className="flex-1"
         />
-        <Button 
+        <Button
           onClick={handleSendApiKey}
           disabled={isSending || !esp32IpAddress.trim()}
         >
@@ -155,22 +156,27 @@ export default function MCUSetup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const homeIdParam = searchParams.get('homeId');
-  
+
   const { currentHome } = useHomeStore();
   const [step, setStep] = useState<SetupStep>('check');
   const [isLoading, setIsLoading] = useState(false);
   const [existingMCU, setExistingMCU] = useState<MCUGateway | null>(null);
   const [homeName, setHomeName] = useState<string>('');
-  
+
   // Form state
   const [serialNumber, setSerialNumber] = useState('');
   const [mcuName, setMcuName] = useState('');
   const [ipAddress, setIpAddress] = useState('');
   const [firmwareVersion, setFirmwareVersion] = useState('');
-  
+
   // Pairing state
   const [pairingResponse, setPairingResponse] = useState<MCUPairingInitResponse | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
+
+  // IP Address edit state
+  const [isEditingIP, setIsEditingIP] = useState(false);
+  const [newIPAddress, setNewIPAddress] = useState('');
+  const [isUpdatingIP, setIsUpdatingIP] = useState(false);
 
   const homeId = homeIdParam ? parseInt(homeIdParam) : currentHome?.id;
 
@@ -187,17 +193,17 @@ export default function MCUSetup() {
   // Auto-refresh MCU status every 30 seconds when MCU exists
   useEffect(() => {
     if (!existingMCU || step !== 'check') return;
-    
+
     const interval = setInterval(() => {
       checkExistingMCU();
     }, 30000); // 30 seconds
-    
+
     return () => clearInterval(interval);
   }, [existingMCU, step]);
 
   const checkExistingMCU = async () => {
     if (!homeId) return;
-    
+
     setIsLoading(true);
     try {
       const response = await mcuApi.getByHomeId(homeId);
@@ -258,14 +264,14 @@ export default function MCUSetup() {
     setIsLoading(true);
     try {
       const response = await mcuApi.confirmPairing(pairingResponse.mcuGatewayId, homeId);
-      
+
       if (response.data.apiKey) {
         setApiKey(response.data.apiKey);
       }
-      
+
       // Refresh MCU info sau khi confirm pairing
       await checkExistingMCU();
-      
+
       setStep('success');
       toast.success('Kết nối MCU Gateway thành công!');
     } catch (error: any) {
@@ -295,6 +301,37 @@ export default function MCUSetup() {
 
   const goToDashboard = () => {
     navigate('/dashboard', { replace: true });
+  };
+
+  const handleUpdateIPAddress = async () => {
+    if (!existingMCU) return;
+
+    if (!newIPAddress.trim()) {
+      toast.error('Vui lòng nhập địa chỉ IP');
+      return;
+    }
+
+    // Basic IP validation
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRegex.test(newIPAddress.trim())) {
+      toast.error('Địa chỉ IP không hợp lệ');
+      return;
+    }
+
+    setIsUpdatingIP(true);
+    try {
+      await mcuApi.updateIPAddress(existingMCU.id, newIPAddress.trim());
+      toast.success('Đã cập nhật IP Address thành công');
+      setIsEditingIP(false);
+      setNewIPAddress('');
+      // Refresh MCU info
+      await checkExistingMCU();
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || 'Không thể cập nhật IP Address';
+      toast.error(errorMsg);
+    } finally {
+      setIsUpdatingIP(false);
+    }
   };
 
   const getStatusBadge = (status: string, isOnline: boolean) => {
@@ -365,7 +402,20 @@ export default function MCUSetup() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="space-y-1">
-                  <p className="text-muted-foreground">IP Address</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-muted-foreground">IP Address</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2"
+                      onClick={() => {
+                        setNewIPAddress(existingMCU.ipAddress || '');
+                        setIsEditingIP(true);
+                      }}
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  </div>
                   <p className="font-medium">{existingMCU.ipAddress || 'Chưa có'}</p>
                 </div>
                 <div className="space-y-1">
@@ -375,7 +425,7 @@ export default function MCUSetup() {
                 <div className="space-y-1">
                   <p className="text-muted-foreground">Kết nối lúc</p>
                   <p className="font-medium">
-                    {existingMCU.pairedAt 
+                    {existingMCU.pairedAt
                       ? new Date(existingMCU.pairedAt).toLocaleDateString('vi-VN')
                       : 'N/A'}
                   </p>
@@ -383,15 +433,15 @@ export default function MCUSetup() {
                 <div className="space-y-1">
                   <p className="text-muted-foreground">Heartbeat cuối</p>
                   <p className="font-medium">
-                    {existingMCU.lastHeartbeat 
+                    {existingMCU.lastHeartbeat
                       ? new Date(existingMCU.lastHeartbeat).toLocaleString('vi-VN')
-                      : existingMCU.status === 'PAIRING' 
+                      : existingMCU.status === 'PAIRING'
                         ? 'Chưa có (đang ghép nối)'
                         : 'Chưa có (chưa nhận API Key)'}
                   </p>
                 </div>
               </div>
-              
+
               {/* Warning nếu MCU đã pair nhưng chưa online */}
               {existingMCU.status !== 'PAIRING' && !existingMCU.isOnline && (
                 <div className="p-4 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
@@ -402,7 +452,7 @@ export default function MCUSetup() {
                         MCU Gateway chưa kết nối
                       </p>
                       <p className="text-yellow-700 dark:text-yellow-300">
-                        {!existingMCU.lastHeartbeat 
+                        {!existingMCU.lastHeartbeat
                           ? 'ESP32 chưa gửi heartbeat. Đảm bảo ESP32 đã nhận API Key và đang kết nối WiFi.'
                           : 'ESP32 đã mất kết nối. Kiểm tra thiết bị và kết nối WiFi.'}
                       </p>
@@ -419,8 +469,8 @@ export default function MCUSetup() {
               <Separator />
 
               <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="flex-1"
                   onClick={checkExistingMCU}
                   disabled={isLoading}
@@ -428,11 +478,11 @@ export default function MCUSetup() {
                   <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                   Làm mới
                 </Button>
-                
+
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
+                    <Button
+                      variant="destructive"
                       className="flex-1"
                       disabled={isLoading}
                     >
@@ -452,7 +502,7 @@ export default function MCUSetup() {
                             <p className="font-medium text-foreground mb-2">
                               Bạn có chắc chắn muốn gỡ MCU Gateway này không?
                             </p>
-                            
+
                             {/* Thông tin MCU sẽ bị gỡ */}
                             {existingMCU && (
                               <div className="p-3 bg-muted/50 rounded-lg space-y-2 text-sm mt-3">
@@ -479,7 +529,7 @@ export default function MCUSetup() {
                               </div>
                             )}
                           </div>
-                          
+
                           <div className="pt-2 border-t">
                             <p className="font-medium text-foreground mb-2">Hành động này sẽ:</p>
                             <ul className="list-disc list-inside space-y-1.5 text-sm">
@@ -516,8 +566,8 @@ export default function MCUSetup() {
                 </AlertDialog>
               </div>
 
-              <Button 
-                className="w-full" 
+              <Button
+                className="w-full"
                 size="lg"
                 onClick={goToDashboard}
               >
@@ -592,15 +642,15 @@ export default function MCUSetup() {
               <Separator />
 
               <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => navigate(-1)}
                   className="flex-1"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Quay lại
                 </Button>
-                <Button 
+                <Button
                   onClick={handleInitPairing}
                   disabled={isLoading || !serialNumber.trim()}
                   className="flex-1"
@@ -657,7 +707,7 @@ export default function MCUSetup() {
                       Lưu ý quan trọng
                     </p>
                     <p className="text-yellow-700 dark:text-yellow-300 mt-1">
-                      Sau khi xác nhận, API Key sẽ được tạo và chỉ hiển thị một lần. 
+                      Sau khi xác nhận, API Key sẽ được tạo và chỉ hiển thị một lần.
                       Hãy lưu lại để cấu hình cho ESP32.
                     </p>
                   </div>
@@ -667,15 +717,15 @@ export default function MCUSetup() {
               <Separator />
 
               <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setStep('input')}
                   className="flex-1"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Quay lại
                 </Button>
-                <Button 
+                <Button
                   onClick={handleConfirmPairing}
                   disabled={isLoading}
                   className="flex-1 bg-green-600 hover:bg-green-700"
@@ -710,15 +760,15 @@ export default function MCUSetup() {
               {apiKey && (
                 <>
                   {/* Send API Key to ESP32 */}
-                  <SendApiKeyToESP32 
+                  <SendApiKeyToESP32
                     apiKey={apiKey}
                     mcuGatewayId={pairingResponse?.mcuGatewayId || 0}
                     homeId={homeId || 0}
                     defaultIpAddress={ipAddress}
                   />
-                  
+
                   <Separator />
-                  
+
                   {/* Manual API Key display */}
                   <div className="space-y-2">
                     <Label>API Key (Chỉ hiển thị một lần)</Label>
@@ -728,8 +778,8 @@ export default function MCUSetup() {
                     <p className="text-xs text-muted-foreground">
                       Hoặc sao chép API Key này để cấu hình thủ công cho ESP32
                     </p>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => {
                         navigator.clipboard.writeText(apiKey);
@@ -744,8 +794,8 @@ export default function MCUSetup() {
 
               <Separator />
 
-              <Button 
-                className="w-full" 
+              <Button
+                className="w-full"
                 size="lg"
                 onClick={goToDashboard}
               >
@@ -764,7 +814,7 @@ export default function MCUSetup() {
               <div className="text-sm text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">MCU Gateway là gì?</p>
                 <p>
-                  MCU Gateway (ESP32) là thiết bị trung gian giúp kết nối và điều khiển 
+                  MCU Gateway (ESP32) là thiết bị trung gian giúp kết nối và điều khiển
                   các thiết bị IoT trong nhà thông minh của bạn với hệ thống cloud.
                 </p>
               </div>
@@ -772,6 +822,39 @@ export default function MCUSetup() {
           </CardContent>
         </Card>
       </div>
+
+      {/* IP Address Edit Dialog */}
+      <AlertDialog open={isEditingIP} onOpenChange={setIsEditingIP}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cập nhật IP Address</AlertDialogTitle>
+            <AlertDialogDescription>
+              Nhập địa chỉ IP mới của ESP32 MCU Gateway
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Input
+              placeholder="192.168.x.x"
+              value={newIPAddress}
+              onChange={(e) => setNewIPAddress(e.target.value)}
+              disabled={isUpdatingIP}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUpdatingIP}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleUpdateIPAddress();
+              }}
+              disabled={isUpdatingIP}
+            >
+              {isUpdatingIP && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Cập nhật
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

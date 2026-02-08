@@ -40,6 +40,7 @@ public class MqttMessageHandler {
 
     private final MCUGatewayRepository mcuGatewayRepository;
     private final RFIDService rfidService;
+    private final com.example.smart_home_system.service.MqttResponseStore mqttResponseStore;
     private final com.example.smart_home_system.service.MCUGatewayService mcuGatewayService;
     private final com.example.smart_home_system.service.NotificationService notificationService;
     private final NotificationRepository notificationRepository;
@@ -92,6 +93,9 @@ public class MqttMessageHandler {
                     break;
                 case "rfid/cards":
                     handleRFIDCardsList(homeId, payload);
+                    break;
+                case "gpio/available":
+                    handleGPIOAvailable(homeId, payload);
                     break;
                 default:
                     log.debug("[MQTT] Unhandled sub-topic: {}", subTopic);
@@ -222,6 +226,17 @@ public class MqttMessageHandler {
         try {
             log.info("[MQTT] RFID learn status for homeId={}: {}", homeId, payload);
 
+            // If response to request (has requestId), complete the pending future
+            try {
+                JsonNode node = objectMapper.readTree(payload);
+                if (node.has("requestId")) {
+                    String requestId = node.get("requestId").asText();
+                    mqttResponseStore.complete(requestId, payload);
+                    return;
+                }
+            } catch (Exception ignored) {
+            }
+
             // Broadcast to WebSocket: /topic/home/{homeId}/rfid/learn/status
             messagingTemplate.convertAndSend("/topic/home/" + homeId + "/rfid/learn/status", payload);
 
@@ -237,11 +252,48 @@ public class MqttMessageHandler {
         try {
             log.debug("[MQTT] RFID cards list for homeId={}", homeId);
 
+            // If response to request (has requestId), complete the pending future
+            try {
+                JsonNode node = objectMapper.readTree(payload);
+                if (node.has("requestId")) {
+                    String requestId = node.get("requestId").asText();
+                    mqttResponseStore.complete(requestId, payload);
+                    return;
+                }
+            } catch (Exception ignored) {
+            }
+
             // Broadcast to WebSocket: /topic/home/{homeId}/rfid/cards
             messagingTemplate.convertAndSend("/topic/home/" + homeId + "/rfid/cards", payload);
 
         } catch (Exception e) {
             log.error("[MQTT] Error handling RFID cards list: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Handle GPIO available pins response from ESP32
+     */
+    private void handleGPIOAvailable(Long homeId, String payload) {
+        try {
+            log.debug("[MQTT] GPIO available for homeId={}", homeId);
+
+            // If response to request (has requestId), complete the pending future
+            try {
+                JsonNode node = objectMapper.readTree(payload);
+                if (node.has("requestId")) {
+                    String requestId = node.get("requestId").asText();
+                    mqttResponseStore.complete(requestId, payload);
+                    return;
+                }
+            } catch (Exception ignored) {
+            }
+
+            // Broadcast to WebSocket if no requestId
+            messagingTemplate.convertAndSend("/topic/home/" + homeId + "/gpio/available", payload);
+
+        } catch (Exception e) {
+            log.error("[MQTT] Error handling GPIO available: {}", e.getMessage(), e);
         }
     }
 
@@ -353,9 +405,17 @@ public class MqttMessageHandler {
                         homeId, NotificationType.EMERGENCY, since);
                 
                 if (hadRecentEmergency) {
-                    log.info("[MQTT] Emergency cleared for homeId={} (had recent active emergency)", homeId);
-                    
-                    if (mcu.getApiKey() != null) {
+                    // Tránh tạo trùng: nếu đã tạo CLEARED gần đây (2 phút), bỏ qua
+                    LocalDateTime clearedSince = LocalDateTime.now().minusMinutes(2);
+                    boolean alreadyCleared = notificationRepository.existsRecentClearedByHomeId(
+                            homeId, "%giải quyết%", clearedSince);
+                    if (alreadyCleared) {
+                        log.debug("[MQTT] Skipping CLEARED - already created recently for homeId={}", homeId);
+                    } else if (mcu.getApiKey() != null) {
+                        log.info("[MQTT] Emergency cleared for homeId={} (had recent active emergency)", homeId);
+
+                        String resolvedTypeLabel = notificationService.getResolvedEmergencyTypeLabel(homeId);
+
                         notificationService.createEmergencyNotification(
                                 mcu.getApiKey(),
                                 "CLEARED",
@@ -363,10 +423,11 @@ public class MqttMessageHandler {
                                 null,
                                 sensorData.toString()
                         );
-                        
-                        // Broadcast emergency cleared
+
+                        // Broadcast emergency cleared với mô tả cụ thể
                         String clearedPayload = String.format(
-                            "{\"type\":\"CLEARED\",\"isActive\":false,\"timestamp\":%d}",
+                            "{\"type\":\"CLEARED\",\"isActive\":false,\"resolvedTypeLabel\":\"%s\",\"timestamp\":%d}",
+                            resolvedTypeLabel.replace("\"", "\\\""),
                             System.currentTimeMillis()
                         );
                         messagingTemplate.convertAndSend("/topic/home/" + homeId + "/emergency", clearedPayload);

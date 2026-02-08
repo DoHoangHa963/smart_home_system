@@ -39,11 +39,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -689,6 +686,43 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
     }
 
     @Override
+    public MCUGatewayResponse updateIPAddress(Long mcuGatewayId, String ipAddress) {
+        MCUGateway mcuGateway = mcuGatewayRepository.findById(mcuGatewayId)
+                .orElseThrow(() -> new AppException(ErrorCode.MCU_NOT_FOUND));
+
+        Long homeId = mcuGateway.getHome() != null ? mcuGateway.getHome().getId() : null;
+
+        // Kiểm tra permission: chỉ owner hoặc admin mới có thể update
+        if (homeId != null) {
+            String currentUserId = SecurityUtils.getCurrentUserId();
+
+            // Check xem user có phải admin hệ thống không
+            boolean isAdmin = SecurityUtils.getCurrentUserPrincipal().getAuthorities().stream()
+                    .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+
+            // Nếu không phải admin, check xem có phải owner của home không
+            if (!isAdmin) {
+                boolean isOwner = homeMemberRepository.findByHomeIdAndUserIdAndRole(
+                        homeId,
+                        currentUserId,
+                        HomeMemberRole.OWNER).isPresent();
+
+                if (!isOwner) {
+                    throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
+                }
+            }
+        }
+
+        // Update IP address
+        mcuGateway.setIpAddress(ipAddress);
+        mcuGateway = mcuGatewayRepository.save(mcuGateway);
+
+        log.info("MCU Gateway IP address updated: id={}, newIP={}", mcuGatewayId, ipAddress);
+
+        return toResponse(mcuGateway);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public boolean verifyApiKey(String apiKey) {
         return mcuGatewayRepository.findByApiKey(apiKey).isPresent();
@@ -956,47 +990,18 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
         MCUGateway mcuGateway = mcuGatewayRepository.findByHomeId(homeId)
                 .orElseThrow(() -> new AppException(ErrorCode.MCU_NOT_FOUND));
 
-        if (mcuGateway.getIpAddress() == null || mcuGateway.getIpAddress().trim().isEmpty()) {
-            throw new AppException(ErrorCode.MCU_NOT_FOUND, "MCU Gateway IP address is not available");
-        }
-
         if (!mcuGateway.isOnline()) {
             throw new AppException(ErrorCode.MCU_OFFLINE);
         }
 
         try {
-            // Gửi HTTP request đến ESP32 để trigger heartbeat
-            // ESP32 có thể có endpoint /api/trigger-heartbeat hoặc
-            // /api/backend/trigger-heartbeat
-            String esp32Url = "http://" + mcuGateway.getIpAddress() + "/api/backend/trigger-heartbeat";
-
-            // Configure timeout to prevent hanging if ESP32 is offline
-            org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout(3000); // 3 seconds connection timeout
-            factory.setReadTimeout(3000); // 3 seconds read timeout
-
-            RestClient restClient = RestClient.builder()
-                    .requestFactory(factory)
-                    .build();
-
-            String response = restClient.post()
-                    .uri(esp32Url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body("{}")
-                    .retrieve()
-                    .body(String.class);
-
-            log.debug("Trigger heartbeat successful for homeId={}, response={}", homeId, response);
-            return "Heartbeat triggered successfully. ESP32 will send heartbeat shortly.";
-
-        } catch (RestClientException e) {
-            log.warn("Failed to trigger heartbeat for homeId={}: {}", homeId, e.getMessage());
-            // Nếu ESP32 không có endpoint trigger, vẫn trả về success nhưng với message
-            // khác
-            // Vì ESP32 sẽ tự động gửi heartbeat trong vòng 30 giây
-            return "ESP32 không hỗ trợ trigger heartbeat trực tiếp. Heartbeat sẽ được gửi tự động trong vòng 30 giây.";
+            // Gửi MQTT command REQUEST_SENSOR_DATA đến ESP32
+            // ESP32 sẽ phản hồi bằng cách publish sensor data lên smarthome/{homeId}/sensors
+            mqttService.requestSensorData(homeId);
+            log.debug("Trigger heartbeat (MQTT) successful for homeId={}", homeId);
+            return "Heartbeat triggered successfully. ESP32 will send sensor data shortly.";
         } catch (Exception e) {
-            log.error("Unexpected error triggering heartbeat for homeId={}: {}", homeId, e.getMessage(), e);
+            log.error("Failed to trigger heartbeat for homeId={}: {}", homeId, e.getMessage(), e);
             throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
@@ -1144,6 +1149,7 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
     }
 
     @Override
+    @Transactional
     public void sendAutomationConfig(Long homeId, Integer lightThreshold, Integer tempThreshold, Integer gasThreshold) {
         // Verify home exists and has MCU
         MCUGateway mcuGateway = mcuGatewayRepository.findByHomeId(homeId)
@@ -1170,6 +1176,26 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
 
             log.info("Sent automation config to homeId={}: light={}, temp={}, gas={}",
                     homeId, lightThreshold, tempThreshold, gasThreshold);
+
+            // Update metadata immediately so getSensorDataByHomeId returns new values on refresh
+            // (otherwise frontend would see old values until ESP32 sends next heartbeat)
+            String metadata = mcuGateway.getMetadata();
+            Map<String, Object> metaMap;
+            if (metadata != null && !metadata.trim().isEmpty()) {
+                try {
+                    metaMap = objectMapper.readValue(metadata, Map.class);
+                } catch (Exception e) {
+                    log.warn("Could not parse metadata for merge, creating new: {}", e.getMessage());
+                    metaMap = new HashMap<>();
+                }
+            } else {
+                metaMap = new HashMap<>();
+            }
+            if (lightThreshold != null) metaMap.put("autoLightThreshold", lightThreshold);
+            if (tempThreshold != null) metaMap.put("autoFanThreshold", tempThreshold);
+            if (gasThreshold != null) metaMap.put("gasAlertThreshold", gasThreshold);
+            mcuGateway.setMetadata(objectMapper.writeValueAsString(metaMap));
+            mcuGatewayRepository.save(mcuGateway);
 
         } catch (Exception e) {
             log.error("Failed to send automation config to homeId={}: {}", homeId, e.getMessage(), e);
