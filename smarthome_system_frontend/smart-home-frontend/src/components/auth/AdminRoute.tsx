@@ -14,7 +14,7 @@ export const AdminRoute = () => {
 
   // Not logged in -> redirect to login
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" replace />;
   }
 
   // Not admin -> show access denied
@@ -44,7 +44,7 @@ export const HomeRequiredRoute = () => {
   const { hasHomeAccess } = usePermission();
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" replace />;
   }
 
   // User has no home access -> redirect to home selection

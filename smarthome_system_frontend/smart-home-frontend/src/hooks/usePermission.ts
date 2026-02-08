@@ -39,19 +39,47 @@ export const usePermission = () => {
     return currentMember?.role as HomeRole | undefined;
   }, [currentMember?.role]);
 
-  const homePermissions = useMemo<HomePermission[]>(() => {
-    if (!homeRole) return [];
+  // usePermission.ts - CẬP NHẬT homePermissions logic
+    const homePermissions = useMemo<HomePermission[]>(() => {
+      if (!homeRole) return [];
 
-    // 1. Lấy quyền tùy chỉnh từ DB (JSON)
-    const customPermissions = parsePermissions(currentMember?.permissions);
+      // 1. Lấy permissions từ currentMember (từ API /members/me)
+      let permissionsFromMember: string[] = [];
+      
+      if (currentMember?.permissions) {
+        if (Array.isArray(currentMember.permissions)) {
+          // Nếu API trả về trực tiếp array
+          permissionsFromMember = currentMember.permissions;
+        } else if (typeof currentMember.permissions === 'string') {
+          // Nếu là JSON string (tương thích cũ)
+          try {
+            permissionsFromMember = JSON.parse(currentMember.permissions);
+          } catch {
+            permissionsFromMember = [];
+          }
+        }
+      }
 
-    // 2. Lấy quyền mặc định theo Role (định nghĩa trong frontend/types/permission.ts)
-    // Đây là chốt chặn quan trọng: ADMIN phải luôn có quyền mặc định kể cả khi DB rỗng
-    const rolePermissions = getHomeRolePermissions(homeRole);
+      console.log('Permissions from API:', {
+        role: homeRole,
+        fromMember: permissionsFromMember,
+        hasPermissions: permissionsFromMember.length > 0
+      });
 
-    // 3. Merge và loại bỏ trùng lặp
-    return Array.from(new Set([...rolePermissions, ...customPermissions])) as HomePermission[];
-  }, [homeRole, currentMember?.permissions]);
+      // 2. Nếu không có permissions từ API, lấy mặc định theo role
+      if (permissionsFromMember.length === 0) {
+        console.warn('No permissions from API, using default role permissions');
+        return getHomeRolePermissions(homeRole);
+      }
+
+      // 3. Merge với role permissions để đảm bảo không thiếu
+      const rolePermissions = getHomeRolePermissions(homeRole);
+      const allPermissions = Array.from(
+        new Set([...rolePermissions, ...permissionsFromMember])
+      ) as HomePermission[];
+
+      return allPermissions;
+    }, [homeRole, currentMember?.permissions]);
 
   // ============================================
   // PERMISSION CHECKERS (LOGIC QUAN TRỌNG ĐÃ SỬA)

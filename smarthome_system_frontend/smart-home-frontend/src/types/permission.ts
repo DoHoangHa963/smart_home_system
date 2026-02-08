@@ -34,6 +34,10 @@ export const SYSTEM_PERMISSIONS = {
 } as const;
 
 export const HOME_PERMISSIONS = {
+  // Home basic permissions
+  HOME_VIEW: 'HOME_VIEW',
+  HOME_UPDATE: 'HOME_UPDATE',
+  
   // Dashboard
   HOME_DASHBOARD_VIEW: 'HOME_DASHBOARD_VIEW',
 
@@ -76,6 +80,10 @@ export const HOME_PERMISSIONS = {
 
   // Logs
   HOME_LOGS_VIEW: 'HOME_LOGS_VIEW',
+
+  // RFID permissions
+  RFID_VIEW: 'RFID_VIEW',
+  RFID_MANAGE: 'RFID_MANAGE',
 } as const;
 
 export type SystemPermission = typeof SYSTEM_PERMISSIONS[keyof typeof SYSTEM_PERMISSIONS];
@@ -121,6 +129,8 @@ export const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
     HOME_PERMISSIONS.HOME_SETTINGS_VIEW,
     HOME_PERMISSIONS.HOME_SETTINGS_UPDATE,
     HOME_PERMISSIONS.HOME_LOGS_VIEW,
+    HOME_PERMISSIONS.RFID_VIEW,
+    HOME_PERMISSIONS.RFID_MANAGE,
   ],
 
   [HomeRole.ADMIN]: [
@@ -148,6 +158,8 @@ export const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
     HOME_PERMISSIONS.MEMBER_INVITE,
     HOME_PERMISSIONS.HOME_SETTINGS_VIEW,
     HOME_PERMISSIONS.HOME_LOGS_VIEW,
+    HOME_PERMISSIONS.RFID_VIEW,
+    HOME_PERMISSIONS.RFID_MANAGE,
   ],
 
   [HomeRole.MEMBER]: [
@@ -160,6 +172,7 @@ export const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
     HOME_PERMISSIONS.SCENE_VIEW,
     HOME_PERMISSIONS.SCENE_EXECUTE,
     HOME_PERMISSIONS.MEMBER_VIEW,
+    HOME_PERMISSIONS.RFID_VIEW,
   ],
 
   [HomeRole.GUEST]: [
@@ -221,7 +234,7 @@ export const parsePermissions = (permissionsJson?: string): Permission[] => {
   if (!permissionsJson) return [];
   try {
     return JSON.parse(permissionsJson) as Permission[];
-  } catch {
+  } catch { 
     return [];
   }
 };

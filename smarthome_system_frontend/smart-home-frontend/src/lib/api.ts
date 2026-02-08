@@ -1,31 +1,66 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore';
 
-// Kiểm tra xem có đang chạy trên thiết bị di động hay không
-const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-  navigator.userAgent
-);
+// Kiểm tra xem có đang chạy trên thiết bị di động thật hay không (loại trừ DevTools)
+const isRealMobile = () => {
+  const ua = navigator.userAgent;
+  // Chỉ detect mobile thật, không phải DevTools mobile mode
+  const mobilePattern = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+  const hasMobileInUA = mobilePattern.test(ua);
+  // Kiểm tra độ rộng màn hình thực tế để phân biệt mobile thật với DevTools emulation
+  const isSmallScreen = window.innerWidth < 768;
+  
+  return hasMobileInUA && isSmallScreen;
+};
 
 // Xác định base URL
 const getBaseURL = () => {
   const envURL = import.meta.env.VITE_API_URL;
   
-  // Nếu URL từ env đã được cấu hình đúng, sử dụng nó
-  if (envURL && !envURL.includes('localhost')) {
+  // Kiểm tra có phải mobile device thật không
+  const isMobile = isRealMobile();
+  
+  if (isMobile) {
+    // TRÊN MOBILE: Dùng IP từ env hoặc IP mặc định
+    if (envURL && !envURL.includes('localhost') && !envURL.includes('127.0.0.1')) {
+      console.log('📱 Using env URL (mobile):', envURL);
+      return envURL;
+    }
+    // Nếu env có localhost thì thay bằng IP
+    if (envURL?.includes('localhost')) {
+      const mobileURL = envURL.replace('localhost', '192.168.0.199');
+      console.log('📱 Replaced localhost with IP (mobile):', mobileURL);
+      return mobileURL;
+    }
+    // Default cho mobile
+    const mobileURL = 'http://192.168.0.199:8080/api/v1';
+    console.log('📱 Using default mobile URL:', mobileURL);
+    return mobileURL;
+  }
+  
+  // TRÊN DESKTOP: Luôn ưu tiên localhost, bỏ qua env nếu là IP
+  if (envURL && (envURL.includes('localhost') || envURL.includes('127.0.0.1'))) {
+    console.log('💻 Using localhost from env:', envURL);
     return envURL;
   }
   
-  // Trên mobile, nếu không có cấu hình, sử dụng địa chỉ IP mặc định
-  if (isMobile && envURL?.includes('localhost')) {
-    // Thay localhost bằng địa chỉ IP của máy chủ phát triển
-    return envURL.replace('localhost', '192.168.0.199');
+  // Nếu env có IP nhưng đang ở desktop, bỏ qua và dùng localhost
+  if (envURL && !envURL.includes('localhost') && !envURL.includes('127.0.0.1')) {
+    console.warn('⚠️ Env has IP address but running on desktop, using localhost instead');
+    console.warn('   Env URL:', envURL);
   }
   
-  return envURL || 'http://localhost:8080/api/v1';
+  // Desktop default: LUÔN dùng localhost
+  const defaultURL = 'http://localhost:8080/api/v1';
+  console.log('💻 Using default localhost URL:', defaultURL);
+  return defaultURL;
 };
 
+const baseURL = getBaseURL();
+console.log('✅ API Base URL:', baseURL);
+
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,6 +73,7 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log(`📤 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
   return config;
 });
 
@@ -57,9 +93,17 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
+    if (error.response) {
+      console.log(`❌ ${error.config?.method?.toUpperCase()} ${error.config?.url} - ${error.response.status}`, error.response.data);
+    } else if (error.request) {
+      console.log(`⚠️ Network error:`, error.message, 'Request to:', error.config?.baseURL + error.config?.url);
+    }
 
     // Nếu lỗi 401 và chưa từng thử retry (biến _retry chưa set)
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -88,13 +132,14 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Gọi API Refresh Token (Đường dẫn này tùy thuộc vào Backend của bạn)
-        // Dựa vào file list backend của bạn, có thể là /auth/refresh-token
-        const response = await axios.post(`${getBaseURL()}/auth/refresh-token`, {
+        // Gọi API Refresh Token - sử dụng cùng instance api để đảm bảo baseURL đúng
+        const response = await api.post('/auth/refresh-token', {
           refreshToken: refreshToken
         });
 
-        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data;
+        // Backend trả về ApiResponse<AuthResponse>, cần lấy data.data
+        const authData = response.data?.data || response.data;
+        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = authData;
 
         // Lưu token mới vào store
         setTokens(newAccessToken, newRefreshToken);

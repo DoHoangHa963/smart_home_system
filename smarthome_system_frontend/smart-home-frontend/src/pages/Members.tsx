@@ -30,14 +30,22 @@ import { Plus, MoreVertical, Crown, Shield, User, LogOut, ShieldAlert, Users } f
 import { Skeleton } from '@/components/ui/skeleton';
 import AddMemberModal from '@/components/members/AddMemberModal';
 import UpdateRoleModal from '@/components/members/UpdateRoleModal';
+import UpdatePermissionsModal from '@/components/members/UpdatePermissionsModal';
 import type { HomeMember } from '@/types/home';
+import { toast } from 'sonner';
 
 export default function Members() {
-  const { can, isOwner, homeRole, hasHomeAccess, currentHome } = usePermission();
+  const { can, isOwner, isAdmin, homeRole, hasHomeAccess, currentHome } = usePermission();
   const { members, removeMember } = useHomeStore();
+
+  // Capability flags (used for hide-first, but still show a clear notification about limitations)
+  const canInvite = isOwner || homeRole === 'ADMIN' || can(HOME_PERMISSIONS.MEMBER_INVITE);
+  const canUpdateMember = isOwner || homeRole === 'ADMIN' || can(HOME_PERMISSIONS.MEMBER_UPDATE);
+  const canRemoveMember = isOwner || homeRole === 'ADMIN' || can(HOME_PERMISSIONS.MEMBER_REMOVE);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [selectedMember, setSelectedMember] = useState<HomeMember | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,6 +53,33 @@ export default function Members() {
   // ✅ KEY POINT: Dùng ref để track homeId đã fetch
   const fetchedHomeIdRef = useRef<number | null>(null);
   const isFetchingRef = useRef(false);
+  
+  // Function to refresh members
+  const refreshMembers = async () => {
+    const homeId = currentHome?.id;
+    if (!homeId || !hasHomeAccess || !can(HOME_PERMISSIONS.MEMBER_VIEW)) {
+      return;
+    }
+    
+    // Reset ref to allow refetch
+    fetchedHomeIdRef.current = null;
+    
+    setIsLoading(true);
+    try {
+      const { homeApi } = await import('@/lib/api/home.api');
+      const response = await homeApi.getHomeMembers(homeId);
+      const membersData = (response.data || []).map((m: any) => ({
+        ...m,
+        permissions: Array.isArray(m.permissions) ? m.permissions.join(',') : m.permissions,
+      }));
+      useHomeStore.setState({ members: membersData });
+      fetchedHomeIdRef.current = homeId; // Mark as fetched
+    } catch (error) {
+      console.error('Failed to refresh members:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // ✅ GIẢI PHÁP: Fetch members CHỈ 1 LẦN cho mỗi home
   useEffect(() => {
@@ -85,7 +120,10 @@ export default function Members() {
         const response = await homeApi.getHomeMembers(homeId);
         
         // Extract data
-        const membersData = response.data || [];
+        const membersData = (response.data || []).map((m: any) => ({
+          ...m,
+          permissions: Array.isArray(m.permissions) ? m.permissions.join(',') : m.permissions,
+        }));
 
         useHomeStore.setState({ members: membersData });
         
@@ -182,18 +220,31 @@ export default function Members() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">Thành viên</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Vai trò của bạn: <Badge variant="outline">{homeRole}</Badge>
-          </p>
+          <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+            <span>Vai trò của bạn:</span>
+            <Badge variant="outline">{homeRole}</Badge>
+          </div>
         </div>
 
-        {(isOwner || homeRole === 'ADMIN' || can(HOME_PERMISSIONS.MEMBER_INVITE)) && (
+        {canInvite && (
           <Button onClick={() => setShowAddModal(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Mời thành viên
           </Button>
         )}
       </div>
+
+      {/* Show a clear “permission unavailable” hint when user is limited (member/guest) */}
+      {(!canInvite || !canUpdateMember || !canRemoveMember) && (
+        <Alert className="mb-4">
+          <AlertDescription>
+            Một số chức năng bị giới hạn theo quyền của bạn.{' '}
+            {!canInvite && <span className="font-medium">Không thể mời thành viên. </span>}
+            {!canUpdateMember && <span className="font-medium">Không thể đổi vai trò. </span>}
+            {!canRemoveMember && <span className="font-medium">Không thể xóa thành viên. </span>}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {members.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -202,7 +253,7 @@ export default function Members() {
           <p className="text-sm text-muted-foreground mb-4">
             Mời người khác tham gia để bắt đầu quản lý nhà cùng nhau
           </p>
-          {(isOwner || homeRole === 'ADMIN' || can(HOME_PERMISSIONS.MEMBER_INVITE)) && (
+          {canInvite && (
             <Button onClick={() => setShowAddModal(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Mời thành viên đầu tiên
@@ -244,7 +295,7 @@ export default function Members() {
                   </div>
                 </div>
 
-                {member.role !== 'OWNER' && (isOwner || homeRole === 'ADMIN' || can(HOME_PERMISSIONS.MEMBER_UPDATE)) && (
+                {member.role !== 'OWNER' && (canUpdateMember || canRemoveMember) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon">
@@ -255,19 +306,30 @@ export default function Members() {
                       <DropdownMenuLabel>Hành động</DropdownMenuLabel>
                       <DropdownMenuSeparator />
 
-                      {isOwner && (
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedMember(member);
-                            setShowRoleModal(true);
-                          }}
-                        >
-                          <Shield className="mr-2 h-4 w-4" />
-                          Đổi vai trò
-                        </DropdownMenuItem>
+                      {(isOwner || isAdmin) && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedMember(member);
+                              setShowRoleModal(true);
+                            }}
+                          >
+                            <Shield className="mr-2 h-4 w-4" />
+                            Đổi vai trò
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedMember(member);
+                              setShowPermissionsModal(true);
+                            }}
+                          >
+                            <Shield className="mr-2 h-4 w-4" />
+                            Quản lý quyền
+                          </DropdownMenuItem>
+                        </>
                       )}
 
-                      {(isOwner || homeRole === 'ADMIN' || can(HOME_PERMISSIONS.MEMBER_REMOVE)) && (
+                      {canRemoveMember && (
                         <DropdownMenuItem
                           className="text-red-600"
                           onClick={() => {
@@ -295,15 +357,27 @@ export default function Members() {
       />
 
       {selectedMember && (
-        <UpdateRoleModal
-          open={showRoleModal}
-          onClose={() => {
-            setShowRoleModal(false);
-            setSelectedMember(null);
-          }}
-          member={selectedMember}
-          homeId={currentHome?.id || 0}
-        />
+        <>
+          <UpdateRoleModal
+            open={showRoleModal}
+            onClose={() => {
+              setShowRoleModal(false);
+              setSelectedMember(null);
+            }}
+            member={selectedMember}
+            homeId={currentHome?.id || 0}
+          />
+          <UpdatePermissionsModal
+            open={showPermissionsModal}
+            onClose={() => {
+              setShowPermissionsModal(false);
+              setSelectedMember(null);
+            }}
+            member={selectedMember}
+            homeId={currentHome?.id || 0}
+            onSuccess={refreshMembers}
+          />
+        </>
       )}
 
       <AlertDialog open={showRemoveDialog} onOpenChange={setShowRemoveDialog}>

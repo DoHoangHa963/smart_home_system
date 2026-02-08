@@ -18,8 +18,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Shield } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast'; // Import hook toast
+import { useToast } from '@/hooks/use-toast';
 import type { HomeMember } from '@/types/home';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 interface UpdateRoleModalProps {
   open: boolean;
@@ -59,13 +60,10 @@ export default function UpdateRoleModal({
       
       onClose();
     } catch (err: any) {
-      console.error('Failed to update role:', err);
-      // Hiển thị lỗi nếu có sự cố
-      const errorDetail = err.response?.data?.detail || err.response?.data?.message || 'Có lỗi xảy ra';
       toast({
         variant: "destructive",
-        title: "Lỗi cập nhật",
-        description: errorDetail,
+        title: "Không thể cập nhật",
+        description: getUserFriendlyError(err),
       });
     }
   };

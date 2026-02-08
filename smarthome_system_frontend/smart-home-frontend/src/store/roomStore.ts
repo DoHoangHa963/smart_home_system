@@ -15,6 +15,7 @@ import {
 import { ApiError } from '@/types/api';
 import roomApi from '@/lib/api/room.api';
 import { validateRoomRequest } from '@/lib/validation/room.validation';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 interface RoomState {
   // State
@@ -138,7 +139,7 @@ export const useRoomStore = create<RoomState>()(
             set({ rooms, loading: false });
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to fetch rooms',
+              error: getUserFriendlyError(error) || 'Không thể tải danh sách phòng',
               loading: false,
             });
           }
@@ -162,7 +163,7 @@ export const useRoomStore = create<RoomState>()(
             });
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to fetch paginated rooms',
+              error: getUserFriendlyError(error) || 'Không thể tải danh sách phòng',
               loading: false,
             });
           }
@@ -175,7 +176,7 @@ export const useRoomStore = create<RoomState>()(
             set({ currentRoom: room, loading: false });
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to fetch room',
+              error: getUserFriendlyError(error) || 'Không thể tải thông tin phòng',
               loading: false,
             });
           }
@@ -194,7 +195,7 @@ export const useRoomStore = create<RoomState>()(
             }));
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to fetch room statistics',
+              error: getUserFriendlyError(error) || 'Không thể tải thống kê phòng',
               loading: false,
             });
           }
@@ -207,7 +208,7 @@ export const useRoomStore = create<RoomState>()(
             set({ roomSummary: summary, loading: false });
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to fetch room summary',
+              error: getUserFriendlyError(error) || 'Không thể tải tóm tắt phòng',
               loading: false,
             });
           }
@@ -241,11 +242,9 @@ export const useRoomStore = create<RoomState>()(
             
             return newRoom;
           } catch (error: any) {
-            const errorMessage = error.response?.data?.message || 
-                        error.message || 
-                        'Failed to create room';
+            const errorMessage = getUserFriendlyError(error) || 'Không thể tạo phòng';
             set({
-              error: error.response?.data?.message || 'Failed to create room',
+              error: errorMessage,
               loading: false,
             });
             throw error;
@@ -282,11 +281,9 @@ export const useRoomStore = create<RoomState>()(
             
             return updatedRoom;
           } catch (error: any) {
-             const errorMessage = error.response?.data?.message || 
-                        error.message || 
-                        'Failed to update room';
+            const errorMessage = getUserFriendlyError(error) || 'Không thể cập nhật phòng';
             set({
-              error: error.response?.data?.message || 'Failed to update room',
+              error: errorMessage,
               loading: false,
             });
             throw error;
@@ -321,7 +318,7 @@ export const useRoomStore = create<RoomState>()(
             });
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to delete room',
+              error: getUserFriendlyError(error) || 'Không thể xóa phòng',
               loading: false,
             });
             throw error;
@@ -352,7 +349,7 @@ export const useRoomStore = create<RoomState>()(
             set({ loading: false });
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to move device',
+              error: getUserFriendlyError(error) || 'Không thể di chuyển thiết bị',
               loading: false,
             });
             throw error;
@@ -385,7 +382,7 @@ export const useRoomStore = create<RoomState>()(
             });
           } catch (error: any) {
             set({
-              error: error.response?.data?.message || 'Failed to search rooms',
+              error: getUserFriendlyError(error) || 'Không thể tìm kiếm phòng',
               loading: false,
             });
           }

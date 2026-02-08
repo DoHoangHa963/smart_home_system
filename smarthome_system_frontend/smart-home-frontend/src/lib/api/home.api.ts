@@ -11,6 +11,7 @@ import type {
   ApiResponse,
 } from '@/types/home';
 import type { PageableResponse } from '@/types/pageable';
+import type { RecentActivity } from '@/types/admin';
 
 const BASE_URL = '/homes';
 
@@ -34,6 +35,34 @@ export const homeApi = {
       );
       return data;
     },
+
+    getMyHomeMember: async (homeId: number) => {
+    const { data } = await api.get<ApiResponse<HomeMemberResponse>>(
+      `${BASE_URL}/${homeId}/members/me`
+    );
+    return data;
+  },
+
+    /**
+   * Get member permissions
+   */
+  getMemberPermissions: async (homeId: number, userId: string) => {
+    const { data } = await api.get<ApiResponse<string[]>>(
+      `${BASE_URL}/${homeId}/members/${userId}/permissions`
+    );
+    return data;
+  },
+
+  /**
+   * Update member permissions
+   */
+  updateMemberPermissions: async (homeId: number, userId: string, permissions: string[]) => {
+    const { data } = await api.put<ApiResponse<void>>(
+      `${BASE_URL}/${homeId}/members/${userId}/permissions`,
+      { permissions }
+    );
+    return data;
+  },
 
   /**
    * Get all homes where current user is a member
@@ -164,6 +193,21 @@ export const homeApi = {
   checkMember: async (homeId: number, userId: string) => {
     const { data } = await api.get<ApiResponse<boolean>>(
       `${BASE_URL}/${homeId}/members/check/${userId}`
+    );
+    return data;
+  },
+
+  // ============================================
+  // RECENT ACTIVITIES
+  // ============================================
+
+  /**
+   * Get recent activities for a home
+   */
+  getRecentActivities: async (homeId: number, limit: number = 10) => {
+    const { data } = await api.get<ApiResponse<RecentActivity[]>>(
+      `${BASE_URL}/${homeId}/recent-activities`,
+      { params: { limit } }
     );
     return data;
   },

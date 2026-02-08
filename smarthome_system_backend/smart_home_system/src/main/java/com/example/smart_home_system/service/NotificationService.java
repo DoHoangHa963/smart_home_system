@@ -55,6 +55,11 @@ public interface NotificationService {
     /**
      * Create emergency notification from ESP32
      */
-    void createEmergencyNotification(String apiKey, String emergencyType, Boolean isActive, 
+    void createEmergencyNotification(String apiKey, String emergencyType, Boolean isActive,
                                     String deviceCode, String metadata);
+
+    /**
+     * Lấy mô tả loại khẩn cấp đã được giải quyết (FIRE/GAS/BOTH) từ thông báo gần nhất
+     */
+    String getResolvedEmergencyTypeLabel(Long homeId);
 }

@@ -90,4 +90,24 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("homeId") Long homeId,
             @Param("type") NotificationType type,
             @Param("since") LocalDateTime since);
+
+    /**
+     * Lấy thông báo khẩn cấp gần nhất của home (để biết loại FIRE/GAS/BOTH khi tạo CLEARED)
+     */
+    @Query("SELECT n FROM Notification n WHERE n.home.id = :homeId AND n.type = :type ORDER BY n.createdAt DESC")
+    Page<Notification> findRecentEmergencyByHomeId(
+            @Param("homeId") Long homeId,
+            @Param("type") NotificationType type,
+            Pageable pageable);
+
+    /**
+     * Kiểm tra đã tạo thông báo CLEARED gần đây cho home (tránh trùng khi ESP32 gửi sensor data nhiều lần)
+     */
+    @Query("SELECT COUNT(n) > 0 FROM Notification n WHERE n.home.id = :homeId " +
+           "AND n.type = com.example.smart_home_system.enums.NotificationType.SUCCESS " +
+           "AND n.title LIKE :pattern AND n.createdAt >= :since")
+    boolean existsRecentClearedByHomeId(
+            @Param("homeId") Long homeId,
+            @Param("pattern") String pattern,
+            @Param("since") LocalDateTime since);
 }

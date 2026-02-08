@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useCreateRoom } from '@/hooks/useRoom';
 import { validateRoomName, validateRoomRequest } from '@/lib/validation/room.validation';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 export default function CreateRoomModal() {
   const [open, setOpen] = useState(false);
@@ -56,10 +57,7 @@ export default function CreateRoomModal() {
       setName('');
       setValidationError(null);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 
-                          err.message || 
-                          'Không thể tạo phòng. Vui lòng thử lại.';
-      setApiError(errorMessage);
+      setApiError(getUserFriendlyError(err));
     }
   };
 

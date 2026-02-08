@@ -28,13 +28,14 @@ import com.example.smart_home_system.service.MqttService;
 import com.example.smart_home_system.util.GPIOMapping;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.data.domain.Page;
-import org.springframework.web.client.RestClient;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.smart_home_system.exception.DeviceOfflineException;
+
 
 import java.util.List;
 import java.util.Map;
@@ -93,6 +94,7 @@ public class DeviceServiceImpl implements DeviceService {
     private final MCUGatewayRepository mcuGatewayRepository;
     private final MqttService mqttService;
     private final EventLogService eventLogService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Override
     @Transactional
@@ -292,6 +294,7 @@ public class DeviceServiceImpl implements DeviceService {
             if (mcuGateway == null) {
                 // Nếu device vẫn chưa có MCU Gateway, chỉ cập nhật database
                 updateDeviceStateInDatabase(device, command);
+                broadcastDeviceStatusToWebSocket(device);
                 // Ghi log điều khiển device (không có MCU Gateway)
                 eventLogService.logDeviceControl(device, command, "WEB");
                 return;
@@ -308,18 +311,24 @@ public class DeviceServiceImpl implements DeviceService {
         if (gpioPin == null) {
             log.warn("No GPIO pin configured for device: {}. Only updating database.", deviceCode);
             updateDeviceStateInDatabase(device, command);
+            broadcastDeviceStatusToWebSocket(device);
             // Ghi log điều khiển device (không có GPIO pin)
             eventLogService.logDeviceControl(device, command, "WEB");
             return;
         }
 
-        // Sử dụng MQTT để gửi command đến ESP32 (thay vì HTTP polling)
         Long homeId = device.getHomeId();
         if (homeId == null) {
             homeId = mcuGateway.getHome() != null ? mcuGateway.getHome().getId() : null;
         }
 
         if (homeId != null) {
+            // Chỉ gửi lệnh khi MCU còn online (heartbeat/LWT)
+            if (!mcuGateway.isOnline()) {
+                throw new com.example.smart_home_system.exception.AppException(
+                        com.example.smart_home_system.exception.ErrorCode.MCU_OFFLINE,
+                        "MCU Gateway đang offline. Không thể gửi lệnh đến thiết bị.");
+            }
             // Gửi command qua MQTT - instant delivery, không cần polling
             log.info("📤 Sending command via MQTT: homeId={}, deviceCode={}, gpio={}, command={}",
                     homeId, deviceCode, gpioPin, command);
@@ -327,59 +336,17 @@ public class DeviceServiceImpl implements DeviceService {
 
             // Cập nhật database ngay lập tức (optimistic update)
             updateDeviceStateInDatabase(device, command);
+            broadcastDeviceStatusToWebSocket(device);
             log.info("✅ Device {} command sent via MQTT (GPIO {})", deviceCode, gpioPin);
 
             // Ghi log điều khiển device
             eventLogService.logDeviceControl(device, command, "MQTT");
         } else {
-            // Fallback: Nếu không có homeId, thử gọi HTTP trực tiếp
-            String esp32Ip = mcuGateway.getIpAddress();
-            if (esp32Ip != null && !esp32Ip.isEmpty()) {
-                boolean success = callESP32GpioControlHTTP(esp32Ip, gpioPin, command);
-                if (success) {
-                    updateDeviceStateInDatabase(device, command);
-                    log.info("✅ Device {} controlled via HTTP fallback (GPIO {})", deviceCode, gpioPin);
-                    // Ghi log điều khiển device
-                    eventLogService.logDeviceControl(device, command, "HTTP");
-                } else {
-                    log.warn("⚠️ HTTP fallback failed for device {}", deviceCode);
-                    updateDeviceStateInDatabase(device, command);
-                    // Vẫn ghi log dù HTTP fail (device state đã được update)
-                    eventLogService.logDeviceControl(device, command, "HTTP");
-                }
-            } else {
-                log.warn("⚠️ No MQTT homeId and no ESP32 IP for device {}", deviceCode);
-                updateDeviceStateInDatabase(device, command);
-                // Ghi log điều khiển device (fallback)
-                eventLogService.logDeviceControl(device, command, "WEB");
-            }
-        }
-    }
-
-    /**
-     * HTTP fallback - Gọi ESP32 endpoint thống nhất: POST /api/gpio/control
-     * Chỉ dùng khi MQTT không khả dụng
-     */
-    private boolean callESP32GpioControlHTTP(String esp32Ip, Integer gpioPin, String command) {
-        try {
-            String url = "http://" + esp32Ip + "/api/gpio/control";
-            String requestBody = String.format("{\"gpio\":%d,\"command\":\"%s\"}", gpioPin, command);
-
-            log.debug("📤 HTTP Fallback: POST {} with body: {}", url, requestBody);
-
-            RestClient restClient = RestClient.create();
-            String response = restClient.post()
-                    .uri(url)
-                    .header("Content-Type", "application/json")
-                    .body(requestBody)
-                    .retrieve()
-                    .body(String.class);
-
-            log.debug("📥 ESP32 response: {}", response);
-            return response != null && response.contains("ok");
-        } catch (Exception e) {
-            log.error("❌ HTTP fallback failed: {}", e.getMessage());
-            return false;
+            // No homeId - MCU may not be properly associated, update DB only
+            log.warn("⚠️ No homeId for MCU - cannot send command via MQTT for device {}", deviceCode);
+            updateDeviceStateInDatabase(device, command);
+            broadcastDeviceStatusToWebSocket(device);
+            eventLogService.logDeviceControl(device, command, "WEB");
         }
     }
 
@@ -440,6 +407,28 @@ public class DeviceServiceImpl implements DeviceService {
                 return;
         }
         deviceRepository.save(device);
+    }
+
+    /**
+     * Broadcast device status change to WebSocket for realtime Dashboard/Devices updates.
+     * Called after updateDeviceStateInDatabase when device is controlled from WEB or MQTT.
+     */
+    private void broadcastDeviceStatusToWebSocket(Device device) {
+        Long homeId = device.getHomeId();
+        if (homeId == null) return;
+        try {
+            Map<String, Object> payload = Map.of(
+                    "deviceCode", device.getDeviceCode() != null ? device.getDeviceCode() : "",
+                    "status", device.getStatus() != null ? device.getStatus().name() : "UNKNOWN",
+                    "stateValue", device.getStateValue() != null ? device.getStateValue() : "{}",
+                    "source", "WEB"
+            );
+            String topic = "/topic/home/" + homeId + "/device-status";
+            messagingTemplate.convertAndSend(topic, payload);
+            log.debug("[WebSocket] Broadcast device-status for homeId={}, deviceCode={}", homeId, device.getDeviceCode());
+        } catch (Exception e) {
+            log.warn("[WebSocket] Failed to broadcast device-status: {}", e.getMessage());
+        }
     }
 
     private void logCommandSent(String deviceCode, String command, String payload) {
