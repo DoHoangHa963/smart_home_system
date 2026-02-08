@@ -9,6 +9,7 @@ import com.example.smart_home_system.dto.response.MCU.MCUPairingInitResponse;
 import com.example.smart_home_system.dto.response.MCU.MCUPairingResponse;
 import com.example.smart_home_system.dto.response.MCU.MCUSensorDataResponse;
 import com.example.smart_home_system.dto.response.MCU.MCUCommandsResponse;
+import com.example.smart_home_system.service.implement.MCUGatewayServiceImpl;
 
 /**
  * Service interface for managing ESP32 MCU Gateway operations.
@@ -88,6 +89,15 @@ public interface MCUGatewayService {
      * Xóa MCU Gateway (unpair)
      */
     void unpairMCU(Long mcuGatewayId);
+
+    /**
+     * Update IP Address của MCU Gateway
+     * 
+     * @param mcuGatewayId MCU Gateway ID
+     * @param ipAddress    New IP address
+     * @return Updated MCU Gateway response
+     */
+    MCUGatewayResponse updateIPAddress(Long mcuGatewayId, String ipAddress);
 
     /**
      * Verify API Key từ ESP32

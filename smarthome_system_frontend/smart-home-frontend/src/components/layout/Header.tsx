@@ -1,5 +1,5 @@
 // components/layout/Header.tsx
-import { Bell, Search, Menu, Zap, ChevronsUpDown, Check, PlusCircle, LogOut, Home } from 'lucide-react'; // Đã thêm icon Home
+import { Bell, Search, Menu, Zap, ChevronsUpDown, Check, PlusCircle, LogOut, Home, User, Settings, KeyRound } from 'lucide-react'; // Đã thêm icon Home
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useTheme } from "@/components/theme-provider";
@@ -203,8 +203,29 @@ export default function Header() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>Hồ sơ cá nhân</DropdownMenuItem>
-              <DropdownMenuItem>Đổi mật khẩu</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => navigate('/account')}
+                className="cursor-pointer"
+              >
+                <User className="mr-2 h-4 w-4" />
+                <span>Hồ sơ cá nhân</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => navigate('/account#security')}
+                className="cursor-pointer"
+              >
+                <KeyRound className="mr-2 h-4 w-4" />
+                <span>Đổi mật khẩu</span>
+              </DropdownMenuItem>
+              {currentHome && (
+                <DropdownMenuItem
+                  onClick={() => navigate('/home-settings')}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Cài đặt nhà</span>
+                </DropdownMenuItem>
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
 
@@ -269,9 +290,15 @@ export default function Header() {
               )}
             </div>
 
-            <DropdownMenuItem className="text-red-600 cursor-pointer" onClick={logout}>
+            <DropdownMenuItem 
+              className="text-red-600 cursor-pointer" 
+              onClick={() => {
+                logout();
+                navigate('/auth');
+              }}
+            >
               <LogOut className="mr-2 h-4 w-4" />
-              Đăng xuất
+              <span>Đăng xuất</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

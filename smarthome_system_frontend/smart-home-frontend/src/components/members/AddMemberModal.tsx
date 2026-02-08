@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { UserPlus, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getUserFriendlyError } from '@/utils/errorHandler';
 
 interface AddMemberModalProps {
   open: boolean;
@@ -96,20 +97,15 @@ export default function AddMemberModal({ open, onClose, homeId }: AddMemberModal
       }, 1500);
       
     } catch (error: any) {
-      // QUAN TRỌNG: KHÔNG đóng modal khi có lỗi!
-      // Giữ modal mở để hiển thị lỗi
+      const errorMessage = getUserFriendlyError(error);
       
-      const status = error.response?.status;
-      const errorDetail = error.response?.data?.detail || error.response?.data?.message;
-      
-      if (status === 409) {
+      // Handle specific cases for better UX
+      if (error.response?.status === 409) {
         setApiError('Người dùng này đã là thành viên của nhà');
-      } else if (status === 404) {
+      } else if (error.response?.status === 404) {
         setApiError('Không tìm thấy người dùng với thông tin này');
-      } else if (status === 400) {
-        setApiError(errorDetail || 'Thông tin không hợp lệ');
       } else {
-        setApiError('Không thể thêm thành viên. Vui lòng thử lại.');
+        setApiError(errorMessage);
       }
     }
   };

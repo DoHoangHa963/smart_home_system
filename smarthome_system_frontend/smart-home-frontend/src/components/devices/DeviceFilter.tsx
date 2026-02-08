@@ -26,13 +26,17 @@ interface DeviceFilterProps {
   onFilterChange: (filters: any) => void;
   onReset: () => void;
   rooms: Array<{ id: number; name: string }>;
+  availableDeviceTypes?: string[]; // Only show types that actually exist in devices
+  availableDeviceStatuses?: string[]; // Only show statuses that actually exist in devices
 }
 
 const DeviceFilter: React.FC<DeviceFilterProps> = ({
   filters,
   onFilterChange,
   onReset,
-  rooms
+  rooms,
+  availableDeviceTypes = [],
+  availableDeviceStatuses = [],
 }) => {
   const [open, setOpen] = React.useState(false);
   
@@ -73,7 +77,7 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
       {/* Search Bar */}
       <div className="relative">
         <Input
-          placeholder="Search devices by name or code..."
+          placeholder="Tìm kiếm theo tên hoặc mã thiết bị..."
           value={filters.search}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-10"
@@ -95,29 +99,45 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
       <div className="flex flex-wrap gap-2">
         <Select value={filters.deviceType} onValueChange={handleTypeChange}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Type" />
+            <SelectValue placeholder="Loại thiết bị" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {Object.values(DeviceType).map((type) => (
-              <SelectItem key={type} value={type}>
-                {type}
-              </SelectItem>
-            ))}
+            <SelectItem value="all">Tất cả loại</SelectItem>
+            {availableDeviceTypes.length > 0 ? (
+              availableDeviceTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))
+            ) : (
+              Object.values(DeviceType).map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
 
         <Select value={filters.status} onValueChange={handleStatusChange}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Trạng thái" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            {Object.values(DeviceStatus).map((status) => (
-              <SelectItem key={status} value={status}>
-                {status}
-              </SelectItem>
-            ))}
+            <SelectItem value="all">Tất cả trạng thái</SelectItem>
+            {availableDeviceStatuses.length > 0 ? (
+              availableDeviceStatuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
+                </SelectItem>
+              ))
+            ) : (
+              Object.values(DeviceStatus).map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
 
@@ -126,15 +146,21 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
           onValueChange={handleRoomChange}
         >
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Room" />
+            <SelectValue placeholder="Phòng" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Rooms</SelectItem>
-            {rooms.map((room) => (
-              <SelectItem key={room.id} value={room.id.toString()}>
-                {room.name}
+            <SelectItem value="all">Tất cả phòng</SelectItem>
+            {rooms.length > 0 ? (
+              rooms.map((room) => (
+                <SelectItem key={room.id} value={room.id.toString()}>
+                  {room.name}
+                </SelectItem>
+              ))
+            ) : (
+              <SelectItem value="none" disabled>
+                Chưa có phòng
               </SelectItem>
-            ))}
+            )}
           </SelectContent>
         </Select>
 
@@ -143,7 +169,7 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm">
               <SlidersHorizontal className="mr-2 h-4 w-4" />
-              More Filters
+              Bộ lọc nâng cao
               {activeFilterCount > 0 && (
                 <Badge variant="secondary" className="ml-2">
                   {activeFilterCount}
@@ -154,7 +180,7 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
           <PopoverContent className="w-80" align="end">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="font-medium leading-none">Filters</h4>
+                <h4 className="font-medium leading-none">Bộ lọc</h4>
                 {activeFilterCount > 0 && (
                   <Button
                     variant="ghost"
@@ -162,7 +188,7 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
                     onClick={onReset}
                     className="h-auto p-0 text-sm"
                   >
-                    Clear All
+                    Xóa tất cả
                   </Button>
                 )}
               </div>
@@ -170,51 +196,12 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
               <div className="space-y-4">
                 {/* Favorite Filter */}
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="favorite">Favorite Only</Label>
+                  <Label htmlFor="favorite">Chỉ thiết bị yêu thích</Label>
                   <Switch
                     id="favorite"
                     checked={filters.isFavorite === true}
                     onCheckedChange={handleFavoriteChange}
                   />
-                </div>
-
-                {/* Created Date Range */}
-                <div className="space-y-2">
-                  <Label>Created Date</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="dateFrom" className="text-xs">From</Label>
-                      <Input
-                        id="dateFrom"
-                        type="date"
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="dateTo" className="text-xs">To</Label>
-                      <Input
-                        id="dateTo"
-                        type="date"
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sort Options */}
-                <div className="space-y-2">
-                  <Label>Sort By</Label>
-                  <Select defaultValue="createdAt">
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="createdAt">Created Date</SelectItem>
-                      <SelectItem value="name">Name</SelectItem>
-                      <SelectItem value="status">Status</SelectItem>
-                      <SelectItem value="room">Room</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 {/* Reset Button */}
@@ -224,7 +211,7 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
                   className="w-full"
                   disabled={activeFilterCount === 0}
                 >
-                  Reset Filters
+                  Đặt lại bộ lọc
                 </Button>
               </div>
             </div>
@@ -250,40 +237,40 @@ const DeviceFilter: React.FC<DeviceFilterProps> = ({
         <div className="flex flex-wrap gap-2">
           {filters.search && (
             <Badge variant="secondary" className="flex items-center gap-1">
-              Search: {filters.search}
-              <button onClick={() => handleSearchChange('')}>
+              Tìm kiếm: {filters.search}
+              <button onClick={() => handleSearchChange('')} className="ml-1 hover:bg-muted rounded">
                 <X className="h-3 w-3" />
               </button>
             </Badge>
           )}
           {filters.deviceType !== 'all' && (
             <Badge variant="secondary" className="flex items-center gap-1">
-              Type: {filters.deviceType}
-              <button onClick={() => handleTypeChange('all')}>
+              Loại: {filters.deviceType}
+              <button onClick={() => handleTypeChange('all')} className="ml-1 hover:bg-muted rounded">
                 <X className="h-3 w-3" />
               </button>
             </Badge>
           )}
           {filters.status !== 'all' && (
             <Badge variant="secondary" className="flex items-center gap-1">
-              Status: {filters.status}
-              <button onClick={() => handleStatusChange('all')}>
+              Trạng thái: {filters.status}
+              <button onClick={() => handleStatusChange('all')} className="ml-1 hover:bg-muted rounded">
                 <X className="h-3 w-3" />
               </button>
             </Badge>
           )}
           {filters.roomId && (
             <Badge variant="secondary" className="flex items-center gap-1">
-              Room: {rooms.find(r => r.id === filters.roomId)?.name}
-              <button onClick={() => handleRoomChange('all')}>
+              Phòng: {rooms.find(r => r.id === filters.roomId)?.name}
+              <button onClick={() => handleRoomChange('all')} className="ml-1 hover:bg-muted rounded">
                 <X className="h-3 w-3" />
               </button>
             </Badge>
           )}
           {filters.isFavorite === true && (
             <Badge variant="secondary" className="flex items-center gap-1">
-              Favorite
-              <button onClick={() => handleFavoriteChange(false)}>
+              Yêu thích
+              <button onClick={() => handleFavoriteChange(false)} className="ml-1 hover:bg-muted rounded">
                 <X className="h-3 w-3" />
               </button>
             </Badge>

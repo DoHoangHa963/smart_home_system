@@ -1,14 +1,12 @@
 export enum DeviceType {
   LIGHT = 'LIGHT',
+  DOOR = 'DOOR',
+  AIR_CONDITIONER = 'AIR_CONDITIONER',
   FAN = 'FAN',
-  SWITCH = 'SWITCH',
-  SENSOR = 'SENSOR',
-  THERMOSTAT = 'THERMOSTAT',
   CAMERA = 'CAMERA',
-  LOCK = 'LOCK',
-  PLUG = 'PLUG',
-  TV = 'TV',
-  SPEAKER = 'SPEAKER',
+  SENSOR = 'SENSOR',
+  SWITCH = 'SWITCH',
+  CURTAIN = 'CURTAIN',
   OTHER = 'OTHER'
 }
 
@@ -33,6 +31,11 @@ export interface DeviceResponse {
   metadata?: string;
   roomId: number;
   roomName?: string;
+  /**
+   * GPIO pin number trên ESP32 tương ứng với device này
+   * null nếu device không có GPIO mapping
+   */
+  gpioPin?: number | null;
   createdAt: string;
   updatedAt: string;
 }

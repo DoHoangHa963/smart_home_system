@@ -234,6 +234,16 @@ return api.put<ApiResponse<User>>(`/users/${userId}`, data);
         size 
       }
     });
-  }
+  },
 
+  /**
+   * GET /api/v1/admin/users/export/excel
+   * Export all users to Excel file
+   */
+  exportUsersToExcel: async (): Promise<Blob> => {
+    const response = await api.get('/admin/users/export/excel', {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
