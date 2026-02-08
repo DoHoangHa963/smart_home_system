@@ -177,4 +177,70 @@ public class MqttServiceImpl implements MqttService {
             log.error("[MQTT] Failed to update RFID card: {}", e.getMessage(), e);
         }
     }
+
+    @Override
+    public void publishPairingCredentials(String serialNumber, String apiKey, long mcuGatewayId, long homeId) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("type", "PAIRING_CREDENTIALS");
+            payload.put("apiKey", apiKey);
+            payload.put("mcuGatewayId", mcuGatewayId);
+            payload.put("homeId", homeId);
+            payload.put("timestamp", System.currentTimeMillis());
+            
+            String topic = "smarthome/pairing/" + serialNumber;
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            
+            log.info("[MQTT] Publishing pairing credentials to topic={} for serialNumber={}", topic, serialNumber);
+            publish(topic, jsonPayload);
+        } catch (Exception e) {
+            log.error("[MQTT] Failed to publish pairing credentials: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to publish pairing credentials: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void requestRFIDCards(Long homeId, String requestId) {
+        try {
+            Map<String, Object> command = new HashMap<>();
+            command.put("type", "RFID_REQUEST_CARDS");
+            command.put("requestId", requestId);
+            command.put("timestamp", System.currentTimeMillis());
+            String topic = String.format("smarthome/%d/rfid/commands", homeId);
+            publish(topic, objectMapper.writeValueAsString(command));
+            log.debug("[MQTT] Requested RFID cards for homeId={}, requestId={}", homeId, requestId);
+        } catch (Exception e) {
+            log.error("[MQTT] Failed to request RFID cards: {}", e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void requestRFIDLearnStatus(Long homeId, String requestId) {
+        try {
+            Map<String, Object> command = new HashMap<>();
+            command.put("type", "RFID_REQUEST_LEARN_STATUS");
+            command.put("requestId", requestId);
+            command.put("timestamp", System.currentTimeMillis());
+            String topic = String.format("smarthome/%d/rfid/commands", homeId);
+            publish(topic, objectMapper.writeValueAsString(command));
+            log.debug("[MQTT] Requested RFID learn status for homeId={}, requestId={}", homeId, requestId);
+        } catch (Exception e) {
+            log.error("[MQTT] Failed to request RFID learn status: {}", e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void requestGPIOAvailable(Long homeId, String requestId) {
+        try {
+            Map<String, Object> command = new HashMap<>();
+            command.put("type", "REQUEST_GPIO_AVAILABLE");
+            command.put("requestId", requestId);
+            command.put("timestamp", System.currentTimeMillis());
+            String topic = String.format("smarthome/%d/commands", homeId);
+            publish(topic, objectMapper.writeValueAsString(command));
+            log.debug("[MQTT] Requested GPIO available for homeId={}, requestId={}", homeId, requestId);
+        } catch (Exception e) {
+            log.error("[MQTT] Failed to request GPIO available: {}", e.getMessage(), e);
+        }
+    }
 }

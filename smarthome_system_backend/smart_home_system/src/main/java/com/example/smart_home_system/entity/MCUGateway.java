@@ -135,9 +135,13 @@ public class MCUGateway extends BaseEntity {
     String metadata;
 
     /**
-     * Kiểm tra xem MCU có online không (heartbeat trong vòng 5 phút)
+     * Kiểm tra xem MCU có online không.
+     * Trả về false nếu: status=OFFLINE (LWT đã báo), hoặc chưa có heartbeat, hoặc heartbeat cũ hơn 5 phút.
      */
     public boolean isOnline() {
+        if (status == MCUStatus.OFFLINE) {
+            return false;
+        }
         if (lastHeartbeat == null) {
             return false;
         }

@@ -2,7 +2,6 @@ package com.example.smart_home_system.dto.request.MCU;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,11 +24,9 @@ import lombok.NoArgsConstructor;
 public class MCUSendApiKeyRequest {
     
     /**
-     * IP Address của ESP32
+     * IP Address của ESP32 (optional - deprecated for MQTT-only mode)
+     * Kept for backward compatibility with frontend
      */
-    @NotBlank(message = "IP Address không được để trống")
-    @Pattern(regexp = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", 
-             message = "IP Address không hợp lệ")
     private String esp32IpAddress;
     
     /**

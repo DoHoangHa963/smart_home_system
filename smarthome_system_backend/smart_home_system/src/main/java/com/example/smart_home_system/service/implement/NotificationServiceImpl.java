@@ -217,9 +217,11 @@ public class NotificationServiceImpl implements NotificationService {
                     message = "Có tình huống khẩn cấp xảy ra trong nhà. Vui lòng kiểm tra ngay!";
             }
         } else {
+            // Xác định loại khẩn cấp đã được giải quyết từ thông báo gần nhất
+            String resolvedTypeLabel = getResolvedEmergencyTypeLabel(home.getId());
             title = "✅ Tình huống khẩn cấp đã được giải quyết";
-            message = String.format("Tình huống khẩn cấp (%s) đã được giải quyết và hệ thống đã trở về trạng thái bình thường.", 
-                    emergencyType);
+            message = String.format("%s Đã được xác nhận an toàn và hệ thống đã trở về trạng thái bình thường.",
+                    resolvedTypeLabel);
             notificationType = NotificationType.SUCCESS;
         }
 
@@ -246,8 +248,30 @@ public class NotificationServiceImpl implements NotificationService {
             notificationRepository.save(notification);
         }
         
-        log.info("Created emergency notification: type={}, isActive={}, homeId={}, members={}", 
+        log.info("Created emergency notification: type={}, isActive={}, homeId={}, members={}",
                 emergencyType, isActive, home.getId(), members.size());
+    }
+
+    @Override
+    public String getResolvedEmergencyTypeLabel(Long homeId) {
+        var page = notificationRepository.findRecentEmergencyByHomeId(
+                homeId, NotificationType.EMERGENCY, org.springframework.data.domain.PageRequest.of(0, 1));
+        if (page.isEmpty()) {
+            return "Tình huống khẩn cấp";
+        }
+        String lastTitle = page.getContent().get(0).getTitle();
+        if (lastTitle != null) {
+            if (lastTitle.contains("LỬA") && lastTitle.contains("KHÍ")) {
+                return "Cảnh báo cháy và rò rỉ khí gas";
+            }
+            if (lastTitle.contains("LỬA")) {
+                return "Cảnh báo cháy (phát hiện lửa)";
+            }
+            if (lastTitle.contains("KHÍ") || lastTitle.contains("GAS")) {
+                return "Cảnh báo rò rỉ khí gas";
+            }
+        }
+        return "Tình huống khẩn cấp";
     }
 
     private NotificationResponse mapToResponse(Notification notification) {

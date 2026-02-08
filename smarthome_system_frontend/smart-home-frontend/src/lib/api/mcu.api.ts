@@ -221,6 +221,20 @@ export const mcuApi = {
   },
 
   /**
+   * Update MCU Gateway IP Address
+   * 
+   * @param mcuGatewayId - MCU Gateway ID
+   * @param ipAddress - New IP address
+   */
+  updateIPAddress: async (mcuGatewayId: number, ipAddress: string) => {
+    const response = await api.put<{ data: MCUGateway }>(
+      `${MCU_BASE_URL}/${mcuGatewayId}/ip-address`,
+      { ipAddress }
+    );
+    return response.data;
+  },
+
+  /**
    * Get sensor data from MCU Gateway for a specific home
    * 
    * @param homeId - Home ID to query
