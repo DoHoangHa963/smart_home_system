@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// Request object for emergency notifications
 public class MCUEmergencyNotificationRequest {
     @NotBlank(message = "Emergency type is required")
     private String emergencyType; // "FIRE", "GAS", "BOTH"
