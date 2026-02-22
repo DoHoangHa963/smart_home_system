@@ -8,6 +8,8 @@ app:
   base-url: http://localhost:8080
   mcu:
     heartbeat-check-interval-ms: 120000  # 2 phút: đánh dấu MCU offline nếu không có heartbeat/LWT
+    # Tối ưu lưu device_metrics: sampling + batch
+    metric-sampling-interval-seconds: 120  # Chỉ lưu metrics mỗi 2 phút (ESP32 gửi mỗi 30s)
 
 spring:
   datasource:

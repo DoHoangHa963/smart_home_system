@@ -3,7 +3,7 @@ package com.example.smart_home_system.controller;
 import com.example.smart_home_system.constant.RequestApi;
 import com.example.smart_home_system.dto.request.MCU.MCUAutoPairRequest;
 import com.example.smart_home_system.dto.request.MCU.MCUEmergencyNotificationRequest;
-import com.example.smart_home_system.dto.request.MCU.MCUEmergencyNotificationRequest;
+
 import com.example.smart_home_system.dto.request.MCU.MCUHeartbeatRequest;
 import com.example.smart_home_system.dto.request.MCU.MCUPairingRequest;
 import com.example.smart_home_system.dto.request.MCU.MCUSendApiKeyRequest;
@@ -229,7 +229,8 @@ public class MCUGatewayController {
                         if (appEx.getErrorCode() == com.example.smart_home_system.exception.ErrorCode.MCU_OFFLINE) {
                                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                                                 .body(ApiResponse.<DashboardDataResponse>error(
-                                                                "MCU Gateway đang offline. Không thể lấy dữ liệu từ thiết bị.", null));
+                                                                "MCU Gateway đang offline. Không thể lấy dữ liệu từ thiết bị.",
+                                                                null));
                         }
                         throw appEx;
                 } catch (Exception e) {
@@ -304,7 +305,8 @@ public class MCUGatewayController {
 
         /**
          * Send API Key to ESP32 via MQTT (MQTT-only mode)
-         * Backend publishes to smarthome/pairing/{serialNumber}, ESP32 subscribes when in pairing mode
+         * Backend publishes to smarthome/pairing/{serialNumber}, ESP32 subscribes when
+         * in pairing mode
          */
         @Operation(summary = "Send API Key to ESP32 via MQTT", description = "Publish API Key to ESP32 via MQTT pairing topic. ESP32 must be connected to MQTT broker and in pairing mode.")
         @PostMapping("/send-api-key")
@@ -319,7 +321,9 @@ public class MCUGatewayController {
                         MCUGatewayResponse mcuGateway = mcuGatewayService.getById(request.getMcuGatewayId());
                         if (mcuGateway == null || mcuGateway.getSerialNumber() == null) {
                                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                                .body(ApiResponse.<String>error("MCU Gateway not found or serial number missing", null));
+                                                .body(ApiResponse.<String>error(
+                                                                "MCU Gateway not found or serial number missing",
+                                                                null));
                         }
 
                         mqttService.publishPairingCredentials(
@@ -358,14 +362,15 @@ public class MCUGatewayController {
                 log.info("Getting available GPIO pins for homeId={}", homeId);
 
                 try {
-                        mcuGatewayService.getByHomeId(homeId);
+                        MCUGatewayResponse mcu = mcuGatewayService.getByHomeId(homeId);
 
                         String requestId = mqttResponseStore.generateRequestId();
-                        java.util.concurrent.CompletableFuture<String> future = mqttResponseStore.createRequest(requestId);
+                        java.util.concurrent.CompletableFuture<String> future = mqttResponseStore
+                                        .createRequest(requestId);
                         mqttService.requestGPIOAvailable(homeId, requestId);
 
                         String response = mqttResponseStore.getWithTimeout(
-                                        future, 5, java.util.concurrent.TimeUnit.SECONDS);
+                                        future, 12, java.util.concurrent.TimeUnit.SECONDS);
 
                         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                         Object gpioPins = mapper.readValue(response, Object.class);
@@ -374,7 +379,14 @@ public class MCUGatewayController {
                         return ResponseEntity.ok(ApiResponse.success("GPIO pins retrieved successfully", gpioPins));
 
                 } catch (java.util.concurrent.TimeoutException e) {
-                        log.error("MQTT timeout getting GPIO pins for homeId={}", homeId);
+                        log.warn("MQTT timeout getting GPIO pins for homeId={}, using fallback if MCU online", homeId);
+                        MCUGatewayResponse mcu = mcuGatewayService.getByHomeId(homeId);
+                        if (mcu != null && mcu.isOnline()) {
+                                java.util.Map<String, Object> fallback = mcuGatewayService.getDefaultGPIOPins(homeId);
+                                return ResponseEntity.ok(ApiResponse.success(
+                                                "Danh sách GPIO mặc định (ESP32 chưa phản hồi kịp qua MQTT). Bạn vẫn có thể thêm thiết bị.",
+                                                fallback));
+                        }
                         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                                         .body(ApiResponse.error(
                                                         "Không thể kết nối với ESP32. Đảm bảo ESP32 đang online và kết nối MQTT.",
