@@ -22,6 +22,7 @@ import { HOME_PERMISSIONS } from '@/types/permission';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { isNetworkError } from '@/lib/api';
 import roomApi from '@/lib/api/room.api';
 import { mcuApi, MCUOnlineStatus } from '@/lib/api/mcu.api';
 import { DeviceType, DeviceStatus, DeviceResponse } from '@/types/device';
@@ -91,7 +92,7 @@ export default function Devices() {
         }
         setRooms(roomsArray);
       } catch (error) {
-        console.error('Failed to load rooms:', error);
+        if (!isNetworkError(error)) console.error('Failed to load rooms:', error);
         setRooms([]);
       } finally {
         setIsLoadingRooms(false);
@@ -132,7 +133,7 @@ export default function Devices() {
           const status = await mcuApi.checkMCUOnlineStatus(currentHome.id);
           setMcuStatus(status);
         } catch (error) {
-          console.error('Failed to check MCU status:', error);
+          if (!isNetworkError(error)) console.error('Failed to check MCU status:', error);
           setMcuStatus({
             hasMCU: false,
             isOnline: false,

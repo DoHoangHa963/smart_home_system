@@ -1,5 +1,34 @@
 import axios from 'axios';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
+
+// Tránh log/toast lỗi mạng trùng lặp (nhiều request fail cùng lúc / Strict Mode chạy effect 2 lần)
+const NETWORK_LOG_DEBOUNCE_MS = 3000;
+const NETWORK_TOAST_DEBOUNCE_MS = 5000;
+let lastNetworkErrorLogTime = 0;
+let lastNetworkErrorToastTime = 0;
+
+function logNetworkErrorOnce(error: any) {
+  const now = Date.now();
+  if (now - lastNetworkErrorLogTime >= NETWORK_LOG_DEBOUNCE_MS) {
+    lastNetworkErrorLogTime = now;
+    console.warn('⚠️ Lỗi kết nối (network error). Request:', error.config?.method?.toUpperCase(), error.config?.url);
+  }
+}
+
+/** Gọi từ interceptor: chỉ hiển thị 1 toast lỗi mạng trong mỗi khoảng NETWORK_TOAST_DEBOUNCE_MS */
+function showNetworkErrorToastOnce() {
+  const now = Date.now();
+  if (now - lastNetworkErrorToastTime >= NETWORK_TOAST_DEBOUNCE_MS) {
+    lastNetworkErrorToastTime = now;
+    toast.error('Lỗi kết nối. Kiểm tra mạng hoặc server.');
+  }
+}
+
+/** Dùng trong store/component: nếu là lỗi mạng thì không cần toast (interceptor đã xử lý), return true */
+export function isNetworkError(error: any): boolean {
+  return error?.code === 'ERR_NETWORK' || (error?.request && !error?.response);
+}
 
 // Kiểm tra xem có đang chạy trên thiết bị di động thật hay không (loại trừ DevTools)
 const isRealMobile = () => {
@@ -102,7 +131,8 @@ api.interceptors.response.use(
     if (error.response) {
       console.log(`❌ ${error.config?.method?.toUpperCase()} ${error.config?.url} - ${error.response.status}`, error.response.data);
     } else if (error.request) {
-      console.log(`⚠️ Network error:`, error.message, 'Request to:', error.config?.baseURL + error.config?.url);
+      logNetworkErrorOnce(error);
+      showNetworkErrorToastOnce();
     }
 
     // Nếu lỗi 401 và chưa từng thử retry (biến _retry chưa set)

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useHomeStore } from '@/store/homeStore';
+import { usePermission } from '@/hooks/usePermission';
+import { HOME_PERMISSIONS } from '@/types/permission';
 import { rfidApi } from '@/lib/api/mcu.api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,7 +51,12 @@ interface RFIDManagerProps {
 
 export default function RFIDManager({ homeId: propHomeId }: RFIDManagerProps) {
   const { currentHome } = useHomeStore();
+  const { isAdmin, isOwner, can } = usePermission();
   const homeId = propHomeId || currentHome?.id;
+
+  // Permission checks
+  const canViewRFID = isAdmin || isOwner || can(HOME_PERMISSIONS.RFID_VIEW);
+  const canManageRFID = isAdmin || isOwner || can(HOME_PERMISSIONS.RFID_MANAGE);
 
   // State
   const [cards, setCards] = useState<RFIDCard[]>([]);
@@ -219,12 +226,12 @@ export default function RFIDManager({ homeId: propHomeId }: RFIDManagerProps) {
       setLearningStatus(response);
       setNewCardName('');
       toast.info('Đặt thẻ lên đầu đọc trong vòng 10 giây...');
-      
+
       // Clear any existing timeout
       if (learningTimeoutRef.current) {
         clearTimeout(learningTimeoutRef.current);
       }
-      
+
       // Set timeout to stop learning mode if no response after 15 seconds
       // This prevents infinite loading if WebSocket fails
       learningTimeoutRef.current = setTimeout(async () => {
@@ -340,6 +347,17 @@ export default function RFIDManager({ homeId: propHomeId }: RFIDManagerProps) {
     );
   }
 
+  if (!canViewRFID) {
+    return (
+      <Alert variant="destructive">
+        <ShieldAlert className="h-4 w-4" />
+        <AlertDescription>
+          Bạn không có quyền xem thông tin thẻ RFID.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="cards" className="w-full">
@@ -356,45 +374,57 @@ export default function RFIDManager({ homeId: propHomeId }: RFIDManagerProps) {
 
         {/* Cards Tab */}
         <TabsContent value="cards" className="space-y-4">
-          {/* Add Card Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Plus className="w-5 h-5" />
-                Thêm thẻ mới
-              </CardTitle>
-              <CardDescription>
-                Đặt thẻ RFID lên đầu đọc để đăng ký
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLearning ? (
-                <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                  <Loader2 className="w-12 h-12 animate-spin text-primary" />
-                  <p className="text-lg font-medium">Đang chờ thẻ...</p>
-                  <p className="text-sm text-muted-foreground">
-                    {learningStatus?.result || 'Đặt thẻ lên đầu đọc trong vòng 10 giây'}
-                  </p>
-                </div>
-              ) : (
-                <div className="flex gap-4">
-                  <Input
-                    placeholder="Tên thẻ (tùy chọn)"
-                    value={newCardName}
-                    onChange={(e) => setNewCardName(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={handleStartLearning}
-                    disabled={cards.length >= maxCards}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Thêm thẻ
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* View-only banner */}
+          {!canManageRFID && (
+            <Alert className="bg-blue-50 border-blue-200">
+              <AlertDescription className="text-blue-800 flex items-center">
+                <ShieldAlert className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span>Bạn đang ở chế độ xem. Chỉ chủ nhà hoặc quản trị viên mới có thể quản lý thẻ RFID.</span>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Add Card Section - Only for managers */}
+          {canManageRFID && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  Thêm thẻ mới
+                </CardTitle>
+                <CardDescription>
+                  Đặt thẻ RFID lên đầu đọc để đăng ký
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLearning ? (
+                  <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                    <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                    <p className="text-lg font-medium">Đang chờ thẻ...</p>
+                    <p className="text-sm text-muted-foreground">
+                      {learningStatus?.result || 'Đặt thẻ lên đầu đọc trong vòng 10 giây'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex gap-4">
+                    <Input
+                      placeholder="Tên thẻ (tùy chọn)"
+                      value={newCardName}
+                      onChange={(e) => setNewCardName(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleStartLearning}
+                      disabled={cards.length >= maxCards}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Thêm thẻ
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Cards List */}
           <Card>
@@ -415,7 +445,7 @@ export default function RFIDManager({ homeId: propHomeId }: RFIDManagerProps) {
                   <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                   Làm mới
                 </Button>
-                {cards.length > 0 && (
+                {canManageRFID && cards.length > 0 && (
                   <Button
                     variant="destructive"
                     size="sm"
@@ -464,6 +494,7 @@ export default function RFIDManager({ homeId: propHomeId }: RFIDManagerProps) {
                             <Switch
                               checked={card.enabled}
                               onCheckedChange={() => handleToggleEnabled(card)}
+                              disabled={!canManageRFID}
                             />
                             <Badge variant={card.enabled ? 'default' : 'secondary'}>
                               {card.enabled ? 'Hoạt động' : 'Tắt'}
@@ -471,25 +502,27 @@ export default function RFIDManager({ homeId: propHomeId }: RFIDManagerProps) {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingCard(card);
-                                setEditCardName(card.name);
-                              }}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setShowDeleteConfirm(card.index)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </div>
+                          {canManageRFID && (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingCard(card);
+                                  setEditCardName(card.name);
+                                }}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setShowDeleteConfirm(card.index)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { deviceApi } from '@/lib/api/device.api';
+import { isNetworkError } from '@/lib/api';
 import { mcuApi, MCUOnlineStatus } from '@/lib/api/mcu.api';
 import { DeviceResponse, DeviceStatus, DeviceType, PaginatedResponse, ApiResponse } from '@/types/device';
 import { toast } from 'sonner';
@@ -178,7 +179,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('fetchAllDevices error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -221,10 +222,10 @@ export const useDeviceStore = create<DeviceStore>()(
             isLoading: false,
           });
         } catch (error: any) {
-          console.error('fetchDevicesByHome error:', error);
+          if (!isNetworkError(error)) console.error('fetchDevicesByHome error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -267,7 +268,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('fetchDevicesByRoom error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -288,7 +289,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('fetchDeviceById error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -309,7 +310,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('fetchDeviceByCode error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -360,7 +361,7 @@ export const useDeviceStore = create<DeviceStore>()(
           // Đối với các lỗi khác, set error state và throw
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -403,7 +404,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('updateDevice error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -459,7 +460,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('deleteDevice error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -589,7 +590,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('controlDevice error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -622,7 +623,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('updateDeviceStatus error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -638,7 +639,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('sendCommand error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -683,7 +684,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('searchDevices error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           return [];
         }
       },
@@ -706,7 +707,7 @@ export const useDeviceStore = create<DeviceStore>()(
           console.error('getDeviceStatistics error:', error);
           const errorMsg = getUserFriendlyError(error);
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           return null;
         }
       },

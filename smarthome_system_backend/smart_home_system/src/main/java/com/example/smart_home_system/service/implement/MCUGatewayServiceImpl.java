@@ -462,7 +462,8 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
                 }
             }
 
-            // Collect metrics theo device để batch save (1 record/device thay vì 1 record/sensor)
+            // Collect metrics theo device để batch save (1 record/device thay vì 1
+            // record/sensor)
             Map<Device, Map<String, Object>> metricsByDevice = new HashMap<>();
 
             // Process từng sensor value để cập nhật state cụ thể + collect metrics
@@ -613,7 +614,8 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
 
     /**
      * Kiểm tra đã đủ interval để lưu metrics chưa (sampling).
-     * Lần đầu luôn lưu, các lần sau chỉ lưu khi đã qua metricSamplingIntervalSeconds.
+     * Lần đầu luôn lưu, các lần sau chỉ lưu khi đã qua
+     * metricSamplingIntervalSeconds.
      */
     private boolean shouldSampleMetrics(Long homeId) {
         LocalDateTime lastSave = lastMetricSaveByHomeId.get(homeId);
@@ -695,6 +697,28 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
                 if (!isOwner) {
                     throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
                 }
+            }
+        }
+
+        // Gửi lệnh FORCE_UNPAIR cho ESP32 TRƯỚC khi xóa record khỏi DB
+        // Phải làm trước để còn homeId để publish MQTT topic
+        if (homeId != null) {
+            try {
+                mqttService.publishForceUnpair(homeId, "MCU deleted by user");
+                Thread.sleep(500); // Đợi MQTT broker deliver message
+                log.info("FORCE_UNPAIR published to ESP32 for homeId={}", homeId);
+            } catch (Exception e) {
+                log.warn("Failed to send FORCE_UNPAIR to ESP32 (will still delete): {}", e.getMessage());
+            }
+        }
+
+        // Xóa retained pairing message từ MQTT broker
+        // Để ESP32 không nhận lại credentials cũ khi reconnect vào pairing mode
+        if (serialNumber != null) {
+            try {
+                ((MqttServiceImpl) mqttService).clearRetainedPairingMessage(serialNumber);
+            } catch (Exception e) {
+                log.warn("Failed to clear retained pairing message: {}", e.getMessage());
             }
         }
 
@@ -1035,7 +1059,8 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
 
         try {
             // Gửi MQTT command REQUEST_SENSOR_DATA đến ESP32
-            // ESP32 sẽ phản hồi bằng cách publish sensor data lên smarthome/{homeId}/sensors
+            // ESP32 sẽ phản hồi bằng cách publish sensor data lên
+            // smarthome/{homeId}/sensors
             mqttService.requestSensorData(homeId);
             log.debug("Trigger heartbeat (MQTT) successful for homeId={}", homeId);
             return "Heartbeat triggered successfully. ESP32 will send sensor data shortly.";
@@ -1216,7 +1241,8 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
             log.info("Sent automation config to homeId={}: light={}, temp={}, gas={}",
                     homeId, lightThreshold, tempThreshold, gasThreshold);
 
-            // Update metadata immediately so getSensorDataByHomeId returns new values on refresh
+            // Update metadata immediately so getSensorDataByHomeId returns new values on
+            // refresh
             // (otherwise frontend would see old values until ESP32 sends next heartbeat)
             String metadata = mcuGateway.getMetadata();
             Map<String, Object> metaMap;
@@ -1230,9 +1256,12 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
             } else {
                 metaMap = new HashMap<>();
             }
-            if (lightThreshold != null) metaMap.put("autoLightThreshold", lightThreshold);
-            if (tempThreshold != null) metaMap.put("autoFanThreshold", tempThreshold);
-            if (gasThreshold != null) metaMap.put("gasAlertThreshold", gasThreshold);
+            if (lightThreshold != null)
+                metaMap.put("autoLightThreshold", lightThreshold);
+            if (tempThreshold != null)
+                metaMap.put("autoFanThreshold", tempThreshold);
+            if (gasThreshold != null)
+                metaMap.put("gasAlertThreshold", gasThreshold);
             mcuGateway.setMetadata(objectMapper.writeValueAsString(metaMap));
             mcuGatewayRepository.save(mcuGateway);
 

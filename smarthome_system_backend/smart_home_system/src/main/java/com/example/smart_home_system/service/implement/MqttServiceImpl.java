@@ -15,10 +15,11 @@ import java.util.Map;
 /**
  * Implementation of MqttService for handling MQTT messaging.
  * 
- * <p>Topic structure:
+ * <p>
+ * Topic structure:
  * <ul>
- *   <li>smarthome/{homeId}/commands - Commands to ESP32</li>
- *   <li>smarthome/{homeId}/rfid/commands - RFID specific commands</li>
+ * <li>smarthome/{homeId}/commands - Commands to ESP32</li>
+ * <li>smarthome/{homeId}/rfid/commands - RFID specific commands</li>
  * </ul>
  */
 @Service("mqttService")
@@ -40,7 +41,7 @@ public class MqttServiceImpl implements MqttService {
         try {
             // Generate unique command ID using timestamp (ensures uniqueness)
             long commandId = System.currentTimeMillis();
-            
+
             Map<String, Object> command = new HashMap<>();
             command.put("id", commandId);
             command.put("type", "DEVICE_CONTROL");
@@ -48,11 +49,11 @@ public class MqttServiceImpl implements MqttService {
             command.put("gpioPin", gpioPin);
             command.put("action", action);
             command.put("timestamp", commandId);
-            
+
             String payload = objectMapper.writeValueAsString(command);
             String topic = String.format("smarthome/%d/commands", homeId);
-            
-            log.info("[MQTT] Publishing device command to {}: id={}, deviceCode={}, gpio={}, action={}", 
+
+            log.info("[MQTT] Publishing device command to {}: id={}, deviceCode={}, gpio={}, action={}",
                     topic, commandId, deviceCode, gpioPin, action);
             publish(topic, payload);
         } catch (Exception e) {
@@ -69,13 +70,12 @@ public class MqttServiceImpl implements MqttService {
     public void publish(String topic, String payload, boolean retained) {
         try {
             mqttOutboundChannel.send(
-                MessageBuilder.withPayload(payload)
-                    .setHeader(MqttHeaders.TOPIC, topic)
-                    .setHeader(MqttHeaders.RETAINED, retained)
-                    .setHeader(MqttHeaders.QOS, 1)
-                    .build()
-            );
-            log.debug("[MQTT] Published to {}: {}", topic, 
+                    MessageBuilder.withPayload(payload)
+                            .setHeader(MqttHeaders.TOPIC, topic)
+                            .setHeader(MqttHeaders.RETAINED, retained)
+                            .setHeader(MqttHeaders.QOS, 1)
+                            .build());
+            log.debug("[MQTT] Published to {}: {}", topic,
                     payload.length() > 100 ? payload.substring(0, 100) + "..." : payload);
         } catch (Exception e) {
             log.error("[MQTT] Failed to publish to {}: {}", topic, e.getMessage(), e);
@@ -88,10 +88,10 @@ public class MqttServiceImpl implements MqttService {
             Map<String, Object> command = new HashMap<>();
             command.put("type", "REQUEST_SENSOR_DATA");
             command.put("timestamp", System.currentTimeMillis());
-            
+
             String payload = objectMapper.writeValueAsString(command);
             String topic = String.format("smarthome/%d/commands", homeId);
-            
+
             log.info("[MQTT] Requesting sensor data from homeId={}", homeId);
             publish(topic, payload);
         } catch (Exception e) {
@@ -108,10 +108,10 @@ public class MqttServiceImpl implements MqttService {
                 command.put("cardName", cardName);
             }
             command.put("timestamp", System.currentTimeMillis());
-            
+
             String payload = objectMapper.writeValueAsString(command);
             String topic = String.format("smarthome/%d/rfid/commands", homeId);
-            
+
             log.info("[MQTT] Starting RFID learning for homeId={}, cardName={}", homeId, cardName);
             publish(topic, payload);
         } catch (Exception e) {
@@ -125,10 +125,10 @@ public class MqttServiceImpl implements MqttService {
             Map<String, Object> command = new HashMap<>();
             command.put("type", "RFID_CLEAR_ALL");
             command.put("timestamp", System.currentTimeMillis());
-            
+
             String payload = objectMapper.writeValueAsString(command);
             String topic = String.format("smarthome/%d/rfid/commands", homeId);
-            
+
             log.info("[MQTT] Clearing all RFID cards for homeId={}", homeId);
             publish(topic, payload);
         } catch (Exception e) {
@@ -143,10 +143,10 @@ public class MqttServiceImpl implements MqttService {
             command.put("type", "RFID_DELETE_CARD");
             command.put("cardIndex", cardIndex);
             command.put("timestamp", System.currentTimeMillis());
-            
+
             String payload = objectMapper.writeValueAsString(command);
             String topic = String.format("smarthome/%d/rfid/commands", homeId);
-            
+
             log.info("[MQTT] Deleting RFID card at index {} for homeId={}", cardIndex, homeId);
             publish(topic, payload);
         } catch (Exception e) {
@@ -167,10 +167,10 @@ public class MqttServiceImpl implements MqttService {
                 command.put("enabled", enabled);
             }
             command.put("timestamp", System.currentTimeMillis());
-            
+
             String payload = objectMapper.writeValueAsString(command);
             String topic = String.format("smarthome/%d/rfid/commands", homeId);
-            
+
             log.info("[MQTT] Updating RFID card at index {} for homeId={}", cardIndex, homeId);
             publish(topic, payload);
         } catch (Exception e) {
@@ -187,10 +187,10 @@ public class MqttServiceImpl implements MqttService {
             payload.put("mcuGatewayId", mcuGatewayId);
             payload.put("homeId", homeId);
             payload.put("timestamp", System.currentTimeMillis());
-            
+
             String topic = "smarthome/pairing/" + serialNumber;
             String jsonPayload = objectMapper.writeValueAsString(payload);
-            
+
             log.info("[MQTT] Publishing pairing credentials to topic={} for serialNumber={}", topic, serialNumber);
             publish(topic, jsonPayload);
         } catch (Exception e) {
@@ -241,6 +241,40 @@ public class MqttServiceImpl implements MqttService {
             log.debug("[MQTT] Requested GPIO available for homeId={}, requestId={}", homeId, requestId);
         } catch (Exception e) {
             log.error("[MQTT] Failed to request GPIO available: {}", e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void publishForceUnpair(Long homeId, String reason) {
+        try {
+            Map<String, Object> command = new HashMap<>();
+            command.put("type", "FORCE_UNPAIR");
+            command.put("reason", reason != null ? reason : "MCU deleted by backend");
+            command.put("timestamp", System.currentTimeMillis());
+
+            String topic = String.format("smarthome/%d/commands", homeId);
+            String payload = objectMapper.writeValueAsString(command);
+
+            log.info("[MQTT] Publishing FORCE_UNPAIR to homeId={}, reason={}", homeId, reason);
+            publish(topic, payload);
+        } catch (Exception e) {
+            log.error("[MQTT] Failed to publish FORCE_UNPAIR: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Clear retained pairing message from MQTT broker.
+     * Must be called when unpairing to prevent ESP32 from receiving stale
+     * credentials.
+     */
+    public void clearRetainedPairingMessage(String serialNumber) {
+        try {
+            String topic = "smarthome/pairing/" + serialNumber;
+            // Publish empty retained message to clear the old one from broker
+            publish(topic, "", true);
+            log.info("[MQTT] Cleared retained pairing message for serialNumber={}", serialNumber);
+        } catch (Exception e) {
+            log.error("[MQTT] Failed to clear retained pairing message: {}", e.getMessage(), e);
         }
     }
 }

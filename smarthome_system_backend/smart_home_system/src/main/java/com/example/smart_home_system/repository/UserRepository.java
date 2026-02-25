@@ -19,16 +19,20 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, String> {
 
     Optional<User> findByEmail(String email);
+
     Optional<User> findByUsername(String username);
 
     boolean existsByEmail(String email);
+
     boolean existsByUsername(String username);
+
     boolean existsByPhone(String phone);
 
     List<User> findByStatus(UserStatus status);
 
     // Tìm user chưa bị xóa
     Optional<User> findByIdAndDeletedAtIsNull(String id);
+
     Page<User> findByDeletedAtIsNull(Pageable pageable);
 
     // Tìm user theo home (owner)
@@ -59,6 +63,10 @@ public interface UserRepository extends JpaRepository<User, String> {
     List<User> findByHomeMemberships_Home_Id(Long homeId);
 
     long countByCreatedAtAfter(LocalDateTime timestamp);
+
+    long countByCreatedAtAfterAndDeletedAtIsNull(LocalDateTime timestamp);
+
+    long countByDeletedAtIsNull();
 
     long countByStatus(UserStatus status);
 }
