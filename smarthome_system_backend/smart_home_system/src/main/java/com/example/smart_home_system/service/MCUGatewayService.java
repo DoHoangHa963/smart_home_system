@@ -160,4 +160,13 @@ public interface MCUGatewayService {
      */
     void sendAutomationConfig(Long homeId, Integer lightThreshold, Integer tempThreshold, Integer gasThreshold);
 
+    /**
+     * Returns default GPIO pins list when ESP32 does not respond in time (MQTT timeout).
+     * Same pin mapping as ESP32 firmware so user can still add devices.
+     *
+     * @param homeId Home ID (used to get MCU serialNumber for response)
+     * @return Map with "pins", "totalPins", "controllablePins", "sensorPins", "serialNumber", "source"="fallback"
+     */
+    java.util.Map<String, Object> getDefaultGPIOPins(Long homeId);
+
 }

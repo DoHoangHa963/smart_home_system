@@ -39,16 +39,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -105,6 +109,12 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
     private final MqttService mqttService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SecureRandom secureRandom = new SecureRandom();
+
+    @Value("${app.mcu.metric-sampling-interval-seconds:120}")
+    private int metricSamplingIntervalSeconds = 120;
+
+    /** Track lần cuối lưu metrics theo homeId - cho sampling */
+    private final Map<Long, LocalDateTime> lastMetricSaveByHomeId = new ConcurrentHashMap<>();
 
     @Override
     public MCUPairingInitResponse initPairing(MCUAutoPairRequest request) {
@@ -452,7 +462,11 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
                 }
             }
 
-            // Process từng sensor value để cập nhật state cụ thể
+            // Collect metrics theo device để batch save (1 record/device thay vì 1
+            // record/sensor)
+            Map<Device, Map<String, Object>> metricsByDevice = new HashMap<>();
+
+            // Process từng sensor value để cập nhật state cụ thể + collect metrics
             for (Map.Entry<String, Integer> entry : sensorToGpioPin.entrySet()) {
                 String sensorName = entry.getKey();
                 Integer gpioPin = entry.getValue();
@@ -493,11 +507,17 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
                     value = valueNode.asText();
                 }
 
-                // Update device state (sẽ set status = ONLINE/ON/OFF)
+                // Update device state (sẽ set status = ONLINE/ON/OFF) - luôn cập nhật real-time
                 updateDeviceState(device, sensorName, value);
 
-                // Lưu vào DeviceMetric
-                saveDeviceMetric(device, sensorName, value);
+                // Collect metrics để batch save (sampling áp dụng ở bước sau)
+                metricsByDevice.computeIfAbsent(device, k -> new HashMap<>()).put(sensorName, value);
+            }
+
+            // Lưu metrics: chỉ khi đủ sampling interval (batch 1 record/device)
+            if (shouldSampleMetrics(homeId) && !metricsByDevice.isEmpty()) {
+                saveDeviceMetricsBatch(metricsByDevice);
+                lastMetricSaveByHomeId.put(homeId, LocalDateTime.now());
             }
 
             log.debug("Processed sensor data from MCU Gateway: {}", mcuGateway.getId());
@@ -593,24 +613,45 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
     }
 
     /**
-     * Lưu sensor data vào DeviceMetric
+     * Kiểm tra đã đủ interval để lưu metrics chưa (sampling).
+     * Lần đầu luôn lưu, các lần sau chỉ lưu khi đã qua
+     * metricSamplingIntervalSeconds.
      */
-    private void saveDeviceMetric(Device device, String sensorName, Object value) {
+    private boolean shouldSampleMetrics(Long homeId) {
+        LocalDateTime lastSave = lastMetricSaveByHomeId.get(homeId);
+        if (lastSave == null) {
+            return true;
+        }
+        long secondsSinceLastSave = ChronoUnit.SECONDS.between(lastSave, LocalDateTime.now());
+        return secondsSinceLastSave >= metricSamplingIntervalSeconds;
+    }
+
+    /**
+     * Lưu batch metrics: 1 record per device với tất cả sensors trong metricsData.
+     * Giảm ~80-90% số records so với lưu 1 record/sensor.
+     */
+    private void saveDeviceMetricsBatch(Map<Device, Map<String, Object>> metricsByDevice) {
+        LocalDateTime now = LocalDateTime.now();
         try {
-            Map<String, Object> metricData = new HashMap<>();
-            metricData.put("sensor", sensorName);
-            metricData.put("value", value);
-            metricData.put("timestamp", LocalDateTime.now().toString());
+            for (Map.Entry<Device, Map<String, Object>> entry : metricsByDevice.entrySet()) {
+                Device device = entry.getKey();
+                Map<String, Object> sensors = entry.getValue();
+                if (sensors.isEmpty()) {
+                    continue;
+                }
+                Map<String, Object> metricData = new HashMap<>();
+                metricData.put("sensors", sensors);
+                metricData.put("timestamp", now.toString());
 
-            DeviceMetric metric = DeviceMetric.builder()
-                    .device(device)
-                    .metricsData(objectMapper.writeValueAsString(metricData))
-                    .build();
-
-            deviceMetricRepository.save(metric);
-
+                DeviceMetric metric = DeviceMetric.builder()
+                        .device(device)
+                        .metricsData(objectMapper.writeValueAsString(metricData))
+                        .build();
+                deviceMetricRepository.save(metric);
+            }
+            log.debug("Saved {} device metrics (batch)", metricsByDevice.size());
         } catch (Exception e) {
-            log.error("Error saving device metric for device {}: {}", device.getDeviceCode(), e.getMessage());
+            log.error("Error saving device metrics batch: {}", e.getMessage());
         }
     }
 
@@ -656,6 +697,28 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
                 if (!isOwner) {
                     throw new AppException(ErrorCode.HOME_ACCESS_DENIED);
                 }
+            }
+        }
+
+        // Gửi lệnh FORCE_UNPAIR cho ESP32 TRƯỚC khi xóa record khỏi DB
+        // Phải làm trước để còn homeId để publish MQTT topic
+        if (homeId != null) {
+            try {
+                mqttService.publishForceUnpair(homeId, "MCU deleted by user");
+                Thread.sleep(500); // Đợi MQTT broker deliver message
+                log.info("FORCE_UNPAIR published to ESP32 for homeId={}", homeId);
+            } catch (Exception e) {
+                log.warn("Failed to send FORCE_UNPAIR to ESP32 (will still delete): {}", e.getMessage());
+            }
+        }
+
+        // Xóa retained pairing message từ MQTT broker
+        // Để ESP32 không nhận lại credentials cũ khi reconnect vào pairing mode
+        if (serialNumber != null) {
+            try {
+                ((MqttServiceImpl) mqttService).clearRetainedPairingMessage(serialNumber);
+            } catch (Exception e) {
+                log.warn("Failed to clear retained pairing message: {}", e.getMessage());
             }
         }
 
@@ -996,7 +1059,8 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
 
         try {
             // Gửi MQTT command REQUEST_SENSOR_DATA đến ESP32
-            // ESP32 sẽ phản hồi bằng cách publish sensor data lên smarthome/{homeId}/sensors
+            // ESP32 sẽ phản hồi bằng cách publish sensor data lên
+            // smarthome/{homeId}/sensors
             mqttService.requestSensorData(homeId);
             log.debug("Trigger heartbeat (MQTT) successful for homeId={}", homeId);
             return "Heartbeat triggered successfully. ESP32 will send sensor data shortly.";
@@ -1177,7 +1241,8 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
             log.info("Sent automation config to homeId={}: light={}, temp={}, gas={}",
                     homeId, lightThreshold, tempThreshold, gasThreshold);
 
-            // Update metadata immediately so getSensorDataByHomeId returns new values on refresh
+            // Update metadata immediately so getSensorDataByHomeId returns new values on
+            // refresh
             // (otherwise frontend would see old values until ESP32 sends next heartbeat)
             String metadata = mcuGateway.getMetadata();
             Map<String, Object> metaMap;
@@ -1191,9 +1256,12 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
             } else {
                 metaMap = new HashMap<>();
             }
-            if (lightThreshold != null) metaMap.put("autoLightThreshold", lightThreshold);
-            if (tempThreshold != null) metaMap.put("autoFanThreshold", tempThreshold);
-            if (gasThreshold != null) metaMap.put("gasAlertThreshold", gasThreshold);
+            if (lightThreshold != null)
+                metaMap.put("autoLightThreshold", lightThreshold);
+            if (tempThreshold != null)
+                metaMap.put("autoFanThreshold", tempThreshold);
+            if (gasThreshold != null)
+                metaMap.put("gasAlertThreshold", gasThreshold);
             mcuGateway.setMetadata(objectMapper.writeValueAsString(metaMap));
             mcuGatewayRepository.save(mcuGateway);
 
@@ -1201,5 +1269,48 @@ public class MCUGatewayServiceImpl implements MCUGatewayService {
             log.error("Failed to send automation config to homeId={}: {}", homeId, e.getMessage(), e);
             throw new RuntimeException("Failed to send automation config: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> getDefaultGPIOPins(Long homeId) {
+        // Same pin mapping as ESP32 firmware (config.h / mqttPublishGPIOAvailable)
+        List<Map<String, Object>> pins = new ArrayList<>();
+
+        addPin(pins, 42, "Light Relay", "LIGHT_RELAY", "OUTPUT", "LIGHT", true, null);
+        addPin(pins, 21, "Fan Relay", "FAN_RELAY", "OUTPUT", "FAN", true, null);
+        addPin(pins, 18, "Door Servo", "DOOR_SERVO", "OUTPUT", "DOOR", true, null);
+        addPin(pins, 4, "Gas Sensor (MQ2)", "GAS_SENSOR", "INPUT_ANALOG", "SENSOR", false, null);
+        addPin(pins, 5, "Light Sensor (LDR)", "LIGHT_SENSOR", "INPUT_ANALOG", "SENSOR", false, null);
+        addPin(pins, 6, "Flame Sensor", "FLAME_SENSOR", "INPUT_DIGITAL", "SENSOR", false, null);
+        addPin(pins, 7, "DHT Indoor (Temp & Humidity)", "TEMP_HUMIDITY_IN", "INPUT_DIGITAL", "SENSOR", false, null);
+        addPin(pins, 16, "DHT Outdoor (Temp & Humidity)", "TEMP_HUMIDITY_OUT", "INPUT_DIGITAL", "SENSOR", false, null);
+        addPin(pins, 41, "Motion Sensor (PIR)", "MOTION_SENSOR", "INPUT_DIGITAL", "SENSOR", false, null);
+        addPin(pins, 3, "Rain Sensor", "RAIN_SENSOR", "INPUT_ANALOG", "SENSOR", false, null);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("pins", pins);
+        result.put("totalPins", 10);
+        result.put("controllablePins", 3);
+        result.put("sensorPins", 7);
+        result.put("source", "fallback");
+        Optional<MCUGateway> mcu = mcuGatewayRepository.findByHomeId(homeId);
+        mcu.ifPresent(g -> result.put("serialNumber", g.getSerialNumber()));
+        return result;
+    }
+
+    private void addPin(List<Map<String, Object>> pins, int gpio, String name, String code,
+            String type, String deviceType, boolean controllable, String currentState) {
+        Map<String, Object> pin = new HashMap<>();
+        pin.put("gpio", gpio);
+        pin.put("name", name);
+        pin.put("code", code);
+        pin.put("type", type);
+        pin.put("deviceType", deviceType);
+        pin.put("controllable", controllable);
+        if (currentState != null) {
+            pin.put("currentState", currentState);
+        }
+        pins.add(pin);
     }
 }

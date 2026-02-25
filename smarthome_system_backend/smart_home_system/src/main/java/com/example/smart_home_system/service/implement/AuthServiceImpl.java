@@ -4,6 +4,7 @@ import com.example.smart_home_system.dto.CustomUserDetails;
 import com.example.smart_home_system.dto.request.*;
 import com.example.smart_home_system.dto.response.AuthResponse;
 import com.example.smart_home_system.dto.response.UserResponse;
+import com.example.smart_home_system.entity.PasswordResetToken;
 import com.example.smart_home_system.entity.RefreshToken;
 import com.example.smart_home_system.entity.Role;
 import com.example.smart_home_system.entity.User;
@@ -11,14 +12,16 @@ import com.example.smart_home_system.enums.RoleType;
 import com.example.smart_home_system.enums.UserStatus;
 import com.example.smart_home_system.exception.*;
 import com.example.smart_home_system.mapper.UserMapper;
+import com.example.smart_home_system.repository.PasswordResetTokenRepository;
 import com.example.smart_home_system.repository.RoleRepository;
 import com.example.smart_home_system.repository.UserRepository;
 import com.example.smart_home_system.security.jwt.JwtTokenProvider;
 import com.example.smart_home_system.service.AuthService;
+import com.example.smart_home_system.service.EmailService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.coyote.BadRequestException;
+import com.example.smart_home_system.exception.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,8 +30,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Implementation of {@link AuthService} for authentication and authorization operations.
@@ -68,13 +73,17 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService {
+    private static final int OTP_EXPIRE_MINUTES = 10;
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
     private final RefreshTokenService refreshTokenService;
+    private final EmailService emailService;
 
     @Value("${jwt.expiration}")
     private Long jwtExpiration;
@@ -255,6 +264,49 @@ public class AuthServiceImpl implements AuthService {
         String userId = getCurrentUserId();
         refreshTokenService.deleteByUserId(userId);
         SecurityContextHolder.clearContext();
+    }
+
+    @Override
+    @Transactional
+    public void requestPasswordReset(ForgotPasswordRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new UnauthorizedException(ErrorCode.ACCOUNT_DISABLED);
+        }
+        passwordResetTokenRepository.deleteByEmail(request.getEmail());
+        String code = String.format("%06d", ThreadLocalRandom.current().nextInt(0, 1_000_000));
+        PasswordResetToken token = PasswordResetToken.builder()
+                .email(request.getEmail())
+                .code(code)
+                .expiresAt(Instant.now().plusSeconds(OTP_EXPIRE_MINUTES * 60L))
+                .build();
+        passwordResetTokenRepository.save(token);
+        emailService.sendPasswordResetOtp(request.getEmail(), code);
+    }
+
+    @Override
+    public void verifyResetCode(VerifyOtpRequest request) {
+        PasswordResetToken token = passwordResetTokenRepository
+                .findByEmailAndCodeAndExpiresAtAfter(request.getEmail(), request.getCode(), Instant.now())
+                .orElseThrow(() -> new UnauthorizedException(ErrorCode.INVALID_OTP));
+        // Verification success - no need to return anything; reset password step will re-validate
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new BadRequestException(ErrorCode.INVALID_CREDENTIALS.getMessage());
+        }
+        PasswordResetToken token = passwordResetTokenRepository
+                .findByEmailAndCodeAndExpiresAtAfter(request.getEmail(), request.getCode(), Instant.now())
+                .orElseThrow(() -> new UnauthorizedException(ErrorCode.INVALID_OTP));
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND.getMessage()));
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        passwordResetTokenRepository.deleteByEmail(request.getEmail());
     }
 
     private String getCurrentUserId() {

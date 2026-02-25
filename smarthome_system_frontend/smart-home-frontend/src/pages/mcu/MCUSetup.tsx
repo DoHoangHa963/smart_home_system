@@ -1,16 +1,14 @@
 /**
  * MCU Gateway Setup Page
- * 
- * This page guides users through the MCU Gateway pairing process.
- * Flow:
- * 1. User enters MCU serial number and device info
- * 2. System creates MCU in PAIRING state
- * 3. User confirms to complete pairing
+ *
+ * Chỉ cần nhập mã SN (Serial Number), hệ thống tự động kết nối (init + confirm pairing).
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useHomeStore } from '@/store/homeStore';
+import { usePermission } from '@/hooks/usePermission';
+import { HOME_PERMISSIONS } from '@/types/permission';
 import { mcuApi } from '@/lib/api/mcu.api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,8 +30,7 @@ import {
 import { toast } from 'sonner';
 import {
   Cpu,
-  Wifi,
-  WifiOff,
+  Link2,
   Home as HomeIcon,
   ArrowLeft,
   ArrowRight,
@@ -41,15 +38,14 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
-  Link2,
   Unlink,
   QrCode,
   Signal,
-  Edit
+  Edit,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import type { MCUGateway, MCUPairingInitResponse } from '@/types/mcu';
-
-type SetupStep = 'check' | 'input' | 'confirm' | 'success';
 
 /**
  * Component to send API Key directly to ESP32
@@ -152,25 +148,32 @@ function SendApiKeyToESP32({ apiKey, mcuGatewayId, homeId, defaultIpAddress }: S
   );
 }
 
+type SetupStep = 'check' | 'input' | 'success';
+
 export default function MCUSetup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const homeIdParam = searchParams.get('homeId');
 
   const { currentHome } = useHomeStore();
+  const { isOwner, isOwnerOrAdmin, isAdmin, can } = usePermission();
+
+  // Permission checks
+  const canManageMCU = isAdmin || isOwner; // Pair/Unpair/Edit IP - only owner or admin
+  const canViewMCU = isAdmin || isOwnerOrAdmin || can(HOME_PERMISSIONS.HOME_SETTINGS_VIEW);
   const [step, setStep] = useState<SetupStep>('check');
   const [isLoading, setIsLoading] = useState(false);
   const [existingMCU, setExistingMCU] = useState<MCUGateway | null>(null);
   const [homeName, setHomeName] = useState<string>('');
 
-  // Form state
-  const [serialNumber, setSerialNumber] = useState('');
+  // Chỉ cần mã SN
   const [mcuName, setMcuName] = useState('');
   const [ipAddress, setIpAddress] = useState('');
   const [firmwareVersion, setFirmwareVersion] = useState('');
 
   // Pairing state
   const [pairingResponse, setPairingResponse] = useState<MCUPairingInitResponse | null>(null);
+  const [serialNumber, setSerialNumber] = useState('');
   const [apiKey, setApiKey] = useState<string | null>(null);
 
   // IP Address edit state
@@ -226,56 +229,34 @@ export default function MCUSetup() {
     }
   };
 
-  const handleInitPairing = async () => {
+  /** Chỉ nhập SN → tự động init pairing + confirm (kết nối ngay) */
+  const handleConnectBySN = async () => {
     if (!serialNumber.trim()) {
       toast.error('Vui lòng nhập Serial Number của MCU');
       return;
     }
-
     if (!homeId) {
       toast.error('Không tìm thấy Home. Vui lòng chọn Home trước.');
       return;
     }
 
     setIsLoading(true);
+    setApiKey(null);
     try {
-      const response = await mcuApi.initPairing({
+      const initRes = await mcuApi.initPairing({
         serialNumber: serialNumber.trim(),
-        homeId: homeId,  // Pass homeId to backend
-        name: mcuName.trim() || undefined,
-        ipAddress: ipAddress.trim() || undefined,
-        firmwareVersion: firmwareVersion.trim() || undefined,
+        homeId,
       });
-
-      setPairingResponse(response.data);
-      setStep('confirm');
-      toast.success('Đã khởi tạo kết nối MCU thành công!');
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Không thể khởi tạo kết nối MCU';
-      toast.error(errorMsg);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleConfirmPairing = async () => {
-    if (!pairingResponse || !homeId) return;
-
-    setIsLoading(true);
-    try {
-      const response = await mcuApi.confirmPairing(pairingResponse.mcuGatewayId, homeId);
-
-      if (response.data.apiKey) {
-        setApiKey(response.data.apiKey);
+      const confirmRes = await mcuApi.confirmPairing(initRes.data.mcuGatewayId, homeId);
+      if (confirmRes.data?.apiKey) {
+        setApiKey(confirmRes.data.apiKey);
       }
-
-      // Refresh MCU info sau khi confirm pairing
+      setPairingResponse(initRes.data);
       await checkExistingMCU();
-
       setStep('success');
       toast.success('Kết nối MCU Gateway thành công!');
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Không thể hoàn tất kết nối MCU';
+      const errorMsg = error.response?.data?.message || 'Không thể kết nối MCU. Kiểm tra lại mã SN và thử lại.';
       toast.error(errorMsg);
     } finally {
       setIsLoading(false);
@@ -404,17 +385,19 @@ export default function MCUSetup() {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-muted-foreground">IP Address</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2"
-                      onClick={() => {
-                        setNewIPAddress(existingMCU.ipAddress || '');
-                        setIsEditingIP(true);
-                      }}
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
+                    {canManageMCU && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2"
+                        onClick={() => {
+                          setNewIPAddress(existingMCU.ipAddress || '');
+                          setIsEditingIP(true);
+                        }}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                   <p className="font-medium">{existingMCU.ipAddress || 'Chưa có'}</p>
                 </div>
@@ -481,14 +464,16 @@ export default function MCUSetup() {
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button
-                      variant="destructive"
-                      className="flex-1"
-                      disabled={isLoading}
-                    >
-                      <Unlink className="h-4 w-4 mr-2" />
-                      Gỡ MCU
-                    </Button>
+                    {canManageMCU && (
+                      <Button
+                        variant="destructive"
+                        className="flex-1"
+                        disabled={isLoading}
+                      >
+                        <Unlink className="h-4 w-4 mr-2" />
+                        Gỡ MCU
+                      </Button>
+                    )}
                   </AlertDialogTrigger>
                   <AlertDialogContent className="max-w-md">
                     <AlertDialogHeader>
@@ -578,8 +563,29 @@ export default function MCUSetup() {
           </Card>
         )}
 
-        {/* Step 1: Input MCU Info */}
-        {step === 'input' && (
+        {/* No permission notice for members */}
+        {step === 'input' && !canManageMCU && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center space-y-4">
+                <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground" />
+                <div>
+                  <h3 className="font-semibold text-lg">Chưa có MCU Gateway</h3>
+                  <p className="text-muted-foreground mt-1">
+                    Nhà này chưa được kết nối với MCU Gateway. Vui lòng liên hệ chủ nhà để thiết lập.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => navigate(-1)}>
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Quay lại
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Chỉ nhập SN → Kết nối tự động - Only visible to owner/admin */}
+        {step === 'input' && canManageMCU && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -587,9 +593,9 @@ export default function MCUSetup() {
                   <QrCode className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle>Nhập thông tin MCU</CardTitle>
+                  <CardTitle>Nhập mã SN MCU</CardTitle>
                   <CardDescription>
-                    Nhập Serial Number từ thiết bị ESP32 của bạn
+                    Nhập Serial Number từ thiết bị ESP32, hệ thống sẽ tự động kết nối
                   </CardDescription>
                 </div>
               </div>
@@ -602,6 +608,8 @@ export default function MCUSetup() {
                   placeholder="VD: ESP32_ABC123..."
                   value={serialNumber}
                   onChange={(e) => setSerialNumber(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleConnectBySN()}
+                  disabled={isLoading}
                 />
                 <p className="text-xs text-muted-foreground">
                   Tìm Serial Number trên thiết bị hoặc trong ứng dụng ESP32
@@ -646,103 +654,34 @@ export default function MCUSetup() {
                   variant="outline"
                   onClick={() => navigate(-1)}
                   className="flex-1"
+                  disabled={isLoading}
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Quay lại
                 </Button>
                 <Button
-                  onClick={handleInitPairing}
+                  onClick={handleConnectBySN}
                   disabled={isLoading || !serialNumber.trim()}
                   className="flex-1"
                 >
                   {isLoading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Đang kết nối...
+                    </>
                   ) : (
-                    <ArrowRight className="h-4 w-4 mr-2" />
+                    <>
+                      <Signal className="h-4 w-4 mr-2" />
+                      Kết nối
+                    </>
                   )}
-                  Tiếp tục
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Step 2: Confirm Pairing */}
-        {step === 'confirm' && pairingResponse && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                  <Link2 className="h-5 w-5 text-yellow-600" />
-                </div>
-                <div>
-                  <CardTitle>Xác nhận kết nối</CardTitle>
-                  <CardDescription>
-                    Xác nhận để hoàn tất quá trình kết nối MCU
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">MCU Gateway</span>
-                  <span className="font-medium">{pairingResponse.name}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Serial Number</span>
-                  <span className="font-mono text-sm">{pairingResponse.serialNumber}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Nhà</span>
-                  <span className="font-medium">{homeName || currentHome?.name || 'N/A'}</span>
-                </div>
-              </div>
-
-              <div className="p-4 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                <div className="flex gap-3">
-                  <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-yellow-800 dark:text-yellow-200">
-                      Lưu ý quan trọng
-                    </p>
-                    <p className="text-yellow-700 dark:text-yellow-300 mt-1">
-                      Sau khi xác nhận, API Key sẽ được tạo và chỉ hiển thị một lần.
-                      Hãy lưu lại để cấu hình cho ESP32.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => setStep('input')}
-                  className="flex-1"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Quay lại
-                </Button>
-                <Button
-                  onClick={handleConfirmPairing}
-                  disabled={isLoading}
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4 mr-2" />
-                  )}
-                  Xác nhận kết nối
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 3: Success */}
+        {/* Success */}
         {step === 'success' && (
           <Card className="border-green-500/30">
             <CardHeader className="text-center">
@@ -762,7 +701,7 @@ export default function MCUSetup() {
                   {/* Send API Key to ESP32 */}
                   <SendApiKeyToESP32
                     apiKey={apiKey}
-                    mcuGatewayId={pairingResponse?.mcuGatewayId || 0}
+                    mcuGatewayId={pairingResponse?.mcuGatewayId || existingMCU?.id || 0}
                     homeId={homeId || 0}
                     defaultIpAddress={ipAddress}
                   />
@@ -771,7 +710,7 @@ export default function MCUSetup() {
 
                   {/* Manual API Key display */}
                   <div className="space-y-2">
-                    <Label>API Key (Chỉ hiển thị một lần)</Label>
+                    <Label>API Key (chỉ hiển thị một lần)</Label>
                     <div className="p-3 bg-muted rounded-lg font-mono text-xs break-all select-all">
                       {apiKey}
                     </div>
@@ -786,13 +725,12 @@ export default function MCUSetup() {
                         toast.success('Đã sao chép API Key');
                       }}
                     >
-                      Sao chép
+                      Sao chép API Key
                     </Button>
                   </div>
+                  <Separator />
                 </>
               )}
-
-              <Separator />
 
               <Button
                 className="w-full"
