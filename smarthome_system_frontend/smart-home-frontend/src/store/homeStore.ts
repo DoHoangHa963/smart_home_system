@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { transformMemberResponse, type Home, type HomeMember, type HomeMemberResponse } from '@/types/home';
 import { homeApi } from '@/lib/api/home.api';
+import { isNetworkError } from '@/lib/api';
 import { toast } from 'sonner';
 import { getUserFriendlyError } from '@/utils/errorHandler';
 
@@ -190,7 +191,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Không thể chọn nhà');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
         }
       },
 
@@ -210,7 +211,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Không thể tạo nhà');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -232,7 +233,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Không thể cập nhật nhà');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -253,7 +254,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Không thể xóa nhà');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -274,7 +275,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Không thể rời khỏi nhà');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -296,7 +297,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Không thể chuyển quyền sở hữu');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -318,7 +319,7 @@ export const useHomeStore = create<HomeState>()(
           console.error('Error fetching members:', error);
           const errorMsg = getErrorMessage(error, 'Không thể tải danh sách thành viên');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -357,7 +358,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Failed to remove member');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },
@@ -384,7 +385,7 @@ export const useHomeStore = create<HomeState>()(
         } catch (error: any) {
           const errorMsg = getErrorMessage(error, 'Không thể cập nhật vai trò');
           set({ error: errorMsg, isLoading: false });
-          toast.error(errorMsg);
+          if (!isNetworkError(error)) toast.error(errorMsg);
           throw error;
         }
       },

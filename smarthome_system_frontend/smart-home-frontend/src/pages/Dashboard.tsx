@@ -181,7 +181,7 @@ const SensorCard = ({ title, value, label, description, color, bgColor, percenta
 export default function Dashboard() {
   const [energyUsage, setEnergyUsage] = useState(65); // Mock 65%
   const { currentHome } = useHomeStore();
-  const { can } = usePermission();
+  const { can, hasHomeAccess } = usePermission();
 
   // Statistics state
   const [statistics, setStatistics] = useState({
@@ -277,29 +277,37 @@ export default function Dashboard() {
     }
   };
 
-  // Load statistics when home changes and user has permission
+  // Load dashboard data when home changes
+  // Sensor data, MCU status, activities: available to all home members
+  // Statistics: only for users with HOME_LOGS_VIEW permission
   useEffect(() => {
-    if (currentHome && can(HOME_PERMISSIONS.HOME_LOGS_VIEW)) {
-      loadStatistics();
-      // Load initial sensor data
+    if (currentHome && hasHomeAccess) {
+      // Load initial sensor data - available to all members
       loadSensorData();
-      // Check MCU status
+      // Check MCU status - available to all members
       checkMCUStatus();
-      // Load recent activities
+      // Load recent activities - available to all members
       loadRecentActivities();
+    }
+    if (currentHome && can(HOME_PERMISSIONS.HOME_LOGS_VIEW)) {
+      // Statistics require HOME_LOGS_VIEW permission
+      loadStatistics();
     }
   }, [currentHome?.id]);
 
   // Fallback refresh (realtime chủ yếu qua WebSocket: sensors, status, device-status)
   // Chỉ poll thống kê + hoạt động mỗi 5 phút (khi thay đổi từ nguồn khác, VD thêm thiết bị từ tab khác)
   useEffect(() => {
-    if (!currentHome || !can(HOME_PERMISSIONS.HOME_LOGS_VIEW)) return;
+    if (!currentHome || !hasHomeAccess) return;
 
     const FALLBACK_INTERVAL_MS = 5 * 60 * 1000; // 5 phút
     const SENSOR_POLL_THRESHOLD_MS = 60 * 1000; // 1 phút không có WS data thì poll sensor
 
     const refreshInterval = setInterval(() => {
-      loadStatistics();
+      // Statistics chỉ refresh nếu có quyền
+      if (can(HOME_PERMISSIONS.HOME_LOGS_VIEW)) {
+        loadStatistics();
+      }
       loadRecentActivities();
 
       // Polling fallback cho sensor data nếu WebSocket không hoạt động
@@ -413,8 +421,9 @@ export default function Dashboard() {
   };
 
   // WebSocket subscription for real-time sensor data
+  // Available to all home members - sensor data is essential for dashboard
   useEffect(() => {
-    if (!currentHome || !can(HOME_PERMISSIONS.HOME_LOGS_VIEW)) {
+    if (!currentHome || !hasHomeAccess) {
       return;
     }
 
@@ -432,39 +441,39 @@ export default function Dashboard() {
     // For now, valid implementation using the service wrapper
     const subId = webSocketService.subscribe(topic, (message) => {
       console.log('[WebSocket] Received sensor update:', message);
-      // Message payload matches MCUSensorDataResponse structure (or partial)
-      // Here we assume it's the full JSON payload
       try {
-        // Need to parse if it comes as string, though service handles JSON parsing
         const sensorData = typeof message === 'string' ? JSON.parse(message) : message;
+        const incomingTime = sensorData?.lastUpdate ? new Date(sensorData.lastUpdate).getTime() : 0;
 
-        // Map to MCUSensorDataResponse if needed, or just use if it matches
-        // Backend sends raw JSON structure that matches what we expect
-        setSensorData(sensorData);
+        // Chỉ cập nhật nếu dữ liệu WS mới hơn hoặc bằng dữ liệu hiện tại → tránh ghi đè dữ liệu vừa lấy từ "Lấy dữ liệu ngay"
+        setSensorData(prev => {
+          const prevTime = prev?.lastUpdate ? new Date(prev.lastUpdate).getTime() : 0;
+          if (incomingTime < prevTime) {
+            console.log('[WebSocket] Bỏ qua sensor update cũ hơn dữ liệu hiện tại');
+            return prev;
+          }
+          return sensorData;
+        });
         setDataStale(false);
         const now = Date.now();
-        setLastWebSocketDataTime(now); // Track thời gian nhận data gần nhất
-        lastWebSocketDataTimeRef.current = now; // Cập nhật ref
+        setLastWebSocketDataTime(now);
+        lastWebSocketDataTimeRef.current = now;
 
-        // Cập nhật MCU status là online khi nhận được WebSocket data
         setMcuStatus(prev => {
           const newStatus: MCUOnlineStatus = prev
             ? { ...prev, isOnline: true, status: 'ONLINE' as const, message: 'Online' }
             : { hasMCU: true, isOnline: true, status: 'ONLINE' as const, message: 'Online' };
-          mcuStatusRef.current = newStatus; // Cập nhật ref
+          mcuStatusRef.current = newStatus;
           return newStatus;
         });
 
-        // Lưu vào localStorage khi nhận data từ WebSocket
-        if (currentHome) {
+        if (currentHome && incomingTime > 0) {
           try {
             localStorage.setItem(getSensorDataStorageKey(currentHome.id), JSON.stringify(sensorData));
           } catch (e) {
             console.warn('[Dashboard] Failed to save sensor data to localStorage:', e);
           }
         }
-
-        // Emergency is now handled by useEmergencyNotification hook
       } catch (e) {
         console.error('Error processing WebSocket message', e);
       }
@@ -530,28 +539,29 @@ export default function Dashboard() {
 
       // Response structure: { data: MCUSensorDataResponse }
       if (response && response.data) {
-        const sensorData = response.data;
-        console.log('[Dashboard] Parsed sensor data:', {
-          mcuGatewayId: sensorData.mcuGatewayId,
-          serialNumber: sensorData.serialNumber,
-          tempIn: sensorData.tempIn,
-          tempOut: sensorData.tempOut,
-          humIn: sensorData.humIn,
-          humOut: sensorData.humOut,
-          gas: sensorData.gas,
-          light: sensorData.light,
-          lastUpdate: sensorData.lastUpdate,
-          rawData: sensorData.rawData
+        const newData = response.data;
+        const newTime = newData?.lastUpdate ? new Date(newData.lastUpdate).getTime() : 0;
+
+        // Chỉ cập nhật nếu dữ liệu API mới hơn hoặc bằng dữ liệu hiện tại → tránh race (loadSensorData gọi từ nhiều nơi / WS)
+        setSensorData(prev => {
+          const prevTime = prev?.lastUpdate ? new Date(prev.lastUpdate).getTime() : 0;
+          if (newTime < prevTime) {
+            console.log('[Dashboard] Bỏ qua sensor data từ API (cũ hơn dữ liệu hiện tại)');
+            return prev;
+          }
+          return newData;
         });
-        setSensorData(sensorData);
-        // Lưu vào localStorage để restore khi MCU offline
-        if (currentHome) {
+        if (currentHome && newTime > 0) {
           try {
-            localStorage.setItem(getSensorDataStorageKey(currentHome.id), JSON.stringify(sensorData));
+            localStorage.setItem(getSensorDataStorageKey(currentHome.id), JSON.stringify(newData));
           } catch (e) {
             console.warn('[Dashboard] Failed to save sensor data to localStorage:', e);
           }
         }
+        console.log('[Dashboard] Parsed sensor data:', {
+          mcuGatewayId: newData.mcuGatewayId,
+          lastUpdate: newData.lastUpdate,
+        });
       } else {
         console.warn('[Dashboard] No sensor data in response:', response);
         // KHÔNG xóa data cũ - giữ nguyên để hiển thị với stale indicator

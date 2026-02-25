@@ -3,7 +3,7 @@ package com.example.smart_home_system.service;
 import com.example.smart_home_system.dto.request.*;
 import com.example.smart_home_system.dto.response.AuthResponse;
 import com.example.smart_home_system.dto.response.UserResponse;
-import org.apache.coyote.BadRequestException;
+import com.example.smart_home_system.exception.BadRequestException;
 
 /**
  * Service interface for authentication and authorization operations.
@@ -50,4 +50,8 @@ public interface AuthService {
     UserResponse updateProfile(UpdateProfileRequest request);
     void changePassword(ChangePasswordRequest request) throws BadRequestException;
     void logout();
+
+    void requestPasswordReset(ForgotPasswordRequest request);
+    void verifyResetCode(VerifyOtpRequest request);
+    void resetPassword(ResetPasswordRequest request);
 }

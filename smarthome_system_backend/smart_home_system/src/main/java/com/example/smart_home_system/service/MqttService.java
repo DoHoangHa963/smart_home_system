@@ -3,7 +3,8 @@ package com.example.smart_home_system.service;
 /**
  * Service interface for MQTT messaging operations.
  * 
- * <p>Provides methods to publish messages to ESP32 devices and
+ * <p>
+ * Provides methods to publish messages to ESP32 devices and
  * handle incoming messages from devices.
  */
 public interface MqttService {
@@ -11,7 +12,7 @@ public interface MqttService {
     /**
      * Publish a command to a specific home's ESP32 device
      * 
-     * @param homeId Home ID
+     * @param homeId  Home ID
      * @param command JSON command string
      */
     void publishCommand(Long homeId, String command);
@@ -19,17 +20,17 @@ public interface MqttService {
     /**
      * Publish a device control command
      * 
-     * @param homeId Home ID
+     * @param homeId     Home ID
      * @param deviceCode Device code
-     * @param gpioPin GPIO pin number
-     * @param action Action to perform (TURN_ON, TURN_OFF, TOGGLE)
+     * @param gpioPin    GPIO pin number
+     * @param action     Action to perform (TURN_ON, TURN_OFF, TOGGLE)
      */
     void publishDeviceCommand(Long homeId, String deviceCode, Integer gpioPin, String action);
 
     /**
      * Publish a message to a specific topic
      * 
-     * @param topic MQTT topic
+     * @param topic   MQTT topic
      * @param payload Message payload
      */
     void publish(String topic, String payload);
@@ -37,8 +38,8 @@ public interface MqttService {
     /**
      * Publish a retained message to a specific topic
      * 
-     * @param topic MQTT topic
-     * @param payload Message payload
+     * @param topic    MQTT topic
+     * @param payload  Message payload
      * @param retained Whether to retain the message
      */
     void publish(String topic, String payload, boolean retained);
@@ -53,7 +54,7 @@ public interface MqttService {
     /**
      * Start RFID learning mode on ESP32
      * 
-     * @param homeId Home ID
+     * @param homeId   Home ID
      * @param cardName Optional name for the new card
      */
     void startRFIDLearning(Long homeId, String cardName);
@@ -68,7 +69,7 @@ public interface MqttService {
     /**
      * Delete a specific RFID card on ESP32
      * 
-     * @param homeId Home ID
+     * @param homeId    Home ID
      * @param cardIndex Card index to delete
      */
     void deleteRFIDCard(Long homeId, int cardIndex);
@@ -76,10 +77,10 @@ public interface MqttService {
     /**
      * Update RFID card information on ESP32
      * 
-     * @param homeId Home ID
+     * @param homeId    Home ID
      * @param cardIndex Card index
-     * @param name New card name (null to keep current)
-     * @param enabled Enable/disable card (null to keep current)
+     * @param name      New card name (null to keep current)
+     * @param enabled   Enable/disable card (null to keep current)
      */
     void updateRFIDCard(Long homeId, int cardIndex, String name, Boolean enabled);
 
@@ -91,22 +92,36 @@ public interface MqttService {
 
     /**
      * Request RFID cards list from ESP32 via MQTT.
-     * Publishes RFID_REQUEST_CARDS to rfid/commands. ESP32 responds to rfid/cards with requestId.
+     * Publishes RFID_REQUEST_CARDS to rfid/commands. ESP32 responds to rfid/cards
+     * with requestId.
      * 
-     * @param homeId Home ID
+     * @param homeId    Home ID
      * @param requestId Correlation ID for response
      */
     void requestRFIDCards(Long homeId, String requestId);
 
     /**
      * Request RFID learning status from ESP32 via MQTT.
-     * Publishes RFID_REQUEST_LEARN_STATUS to rfid/commands. ESP32 responds to rfid/learn/status with requestId.
+     * Publishes RFID_REQUEST_LEARN_STATUS to rfid/commands. ESP32 responds to
+     * rfid/learn/status with requestId.
      */
     void requestRFIDLearnStatus(Long homeId, String requestId);
 
     /**
      * Request GPIO available pins from ESP32 via MQTT.
-     * Publishes REQUEST_GPIO_AVAILABLE to commands. ESP32 responds to gpio/available with requestId.
+     * Publishes REQUEST_GPIO_AVAILABLE to commands. ESP32 responds to
+     * gpio/available with requestId.
      */
     void requestGPIOAvailable(Long homeId, String requestId);
+
+    /**
+     * Publish FORCE_UNPAIR command to ESP32 via MQTT.
+     * ESP32 will clear its pairing data and restart into pairing mode.
+     * Must be called BEFORE deleting the MCU record from the database
+     * so that homeId is still available to form the MQTT topic.
+     *
+     * @param homeId Home ID (used to build the MQTT topic)
+     * @param reason Reason for the unpair (logged on ESP32)
+     */
+    void publishForceUnpair(Long homeId, String reason);
 }
