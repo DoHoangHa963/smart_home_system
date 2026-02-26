@@ -60,8 +60,12 @@ public interface DeviceRepository extends JpaRepository<Device, Long> {
 
     long countByStatus(DeviceStatus status);
 
-    // Group By Type để vẽ biểu đồ tròn (Pie Chart)
-    @Query("SELECT d.type as type, COUNT(d) as count FROM Device d GROUP BY d.type")
+    long countByStatusAndDeletedAtIsNull(DeviceStatus status);
+
+    long countByDeletedAtIsNull();
+
+    // Group By Type để vẽ biểu đồ tròn (Pie Chart) - Chỉ lấy thiết bị chưa bị xóa
+    @Query("SELECT d.type as type, COUNT(d) as count FROM Device d WHERE d.deletedAt IS NULL GROUP BY d.type")
     List<DeviceTypeCount> countDevicesByType();
 
     // Interface projection để hứng kết quả query Group By

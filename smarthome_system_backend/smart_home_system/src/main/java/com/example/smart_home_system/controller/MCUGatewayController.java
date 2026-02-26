@@ -3,7 +3,7 @@ package com.example.smart_home_system.controller;
 import com.example.smart_home_system.constant.RequestApi;
 import com.example.smart_home_system.dto.request.MCU.MCUAutoPairRequest;
 import com.example.smart_home_system.dto.request.MCU.MCUEmergencyNotificationRequest;
-import com.example.smart_home_system.dto.request.MCU.MCUEmergencyNotificationRequest;
+
 import com.example.smart_home_system.dto.request.MCU.MCUHeartbeatRequest;
 import com.example.smart_home_system.dto.request.MCU.MCUPairingRequest;
 import com.example.smart_home_system.dto.request.MCU.MCUSendApiKeyRequest;
@@ -191,7 +191,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Trigger MCU Gateway Heartbeat", description = "Request ESP32 to send heartbeat immediately. Backend will send HTTP request to ESP32.")
         @PostMapping("/home/{homeId}/trigger-heartbeat")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<String>> triggerHeartbeat(
                         @PathVariable("homeId") Long homeId) {
                 log.info("Trigger heartbeat requested for homeId={}", homeId);
@@ -215,7 +215,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Get Full Dashboard Data", description = "Trigger heartbeat and get all dashboard data including sensor data and device statistics.")
         @PostMapping("/home/{homeId}/dashboard-data")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<DashboardDataResponse>> getDashboardData(
                         @PathVariable("homeId") Long homeId) {
                 log.info("Dashboard data requested for homeId={}", homeId);
@@ -229,7 +229,8 @@ public class MCUGatewayController {
                         if (appEx.getErrorCode() == com.example.smart_home_system.exception.ErrorCode.MCU_OFFLINE) {
                                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                                                 .body(ApiResponse.<DashboardDataResponse>error(
-                                                                "MCU Gateway đang offline. Không thể lấy dữ liệu từ thiết bị.", null));
+                                                                "MCU Gateway đang offline. Không thể lấy dữ liệu từ thiết bị.",
+                                                                null));
                         }
                         throw appEx;
                 } catch (Exception e) {
@@ -242,11 +243,11 @@ public class MCUGatewayController {
 
         /**
          * Lấy thông tin MCU Gateway của Home
-         * Chỉ owner hoặc admin hệ thống mới có thể xem MCU
+         * Tất cả thành viên trong nhà đều có thể xem thông tin MCU
          */
-        @Operation(summary = "Get MCU Gateway by Home ID", description = "Get MCU Gateway information for a specific Home. Only owner or system admin can view MCU.")
+        @Operation(summary = "Get MCU Gateway by Home ID", description = "Get MCU Gateway information for a specific Home. Any home member can view MCU info.")
         @GetMapping("/home/{homeId}")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<MCUGatewayResponse>> getByHomeId(
                         @PathVariable("homeId") Long homeId) {
                 MCUGatewayResponse response = mcuGatewayService.getByHomeId(homeId);
@@ -292,10 +293,11 @@ public class MCUGatewayController {
 
         /**
          * Lấy sensor data từ MCU Gateway của Home
+         * Tất cả thành viên trong nhà đều có thể xem sensor data
          */
-        @Operation(summary = "Get MCU Sensor Data by Home ID", description = "Get sensor data from MCU Gateway for a specific Home. Only owner or system admin can view.")
+        @Operation(summary = "Get MCU Sensor Data by Home ID", description = "Get sensor data from MCU Gateway for a specific Home. Any home member can view.")
         @GetMapping("/home/{homeId}/sensor-data")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<MCUSensorDataResponse>> getSensorDataByHomeId(
                         @PathVariable("homeId") Long homeId) {
                 MCUSensorDataResponse response = mcuGatewayService.getSensorDataByHomeId(homeId);
@@ -304,7 +306,8 @@ public class MCUGatewayController {
 
         /**
          * Send API Key to ESP32 via MQTT (MQTT-only mode)
-         * Backend publishes to smarthome/pairing/{serialNumber}, ESP32 subscribes when in pairing mode
+         * Backend publishes to smarthome/pairing/{serialNumber}, ESP32 subscribes when
+         * in pairing mode
          */
         @Operation(summary = "Send API Key to ESP32 via MQTT", description = "Publish API Key to ESP32 via MQTT pairing topic. ESP32 must be connected to MQTT broker and in pairing mode.")
         @PostMapping("/send-api-key")
@@ -319,7 +322,9 @@ public class MCUGatewayController {
                         MCUGatewayResponse mcuGateway = mcuGatewayService.getById(request.getMcuGatewayId());
                         if (mcuGateway == null || mcuGateway.getSerialNumber() == null) {
                                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                                .body(ApiResponse.<String>error("MCU Gateway not found or serial number missing", null));
+                                                .body(ApiResponse.<String>error(
+                                                                "MCU Gateway not found or serial number missing",
+                                                                null));
                         }
 
                         mqttService.publishPairingCredentials(
@@ -358,14 +363,15 @@ public class MCUGatewayController {
                 log.info("Getting available GPIO pins for homeId={}", homeId);
 
                 try {
-                        mcuGatewayService.getByHomeId(homeId);
+                        MCUGatewayResponse mcu = mcuGatewayService.getByHomeId(homeId);
 
                         String requestId = mqttResponseStore.generateRequestId();
-                        java.util.concurrent.CompletableFuture<String> future = mqttResponseStore.createRequest(requestId);
+                        java.util.concurrent.CompletableFuture<String> future = mqttResponseStore
+                                        .createRequest(requestId);
                         mqttService.requestGPIOAvailable(homeId, requestId);
 
                         String response = mqttResponseStore.getWithTimeout(
-                                        future, 5, java.util.concurrent.TimeUnit.SECONDS);
+                                        future, 12, java.util.concurrent.TimeUnit.SECONDS);
 
                         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                         Object gpioPins = mapper.readValue(response, Object.class);
@@ -374,7 +380,14 @@ public class MCUGatewayController {
                         return ResponseEntity.ok(ApiResponse.success("GPIO pins retrieved successfully", gpioPins));
 
                 } catch (java.util.concurrent.TimeoutException e) {
-                        log.error("MQTT timeout getting GPIO pins for homeId={}", homeId);
+                        log.warn("MQTT timeout getting GPIO pins for homeId={}, using fallback if MCU online", homeId);
+                        MCUGatewayResponse mcu = mcuGatewayService.getByHomeId(homeId);
+                        if (mcu != null && mcu.isOnline()) {
+                                java.util.Map<String, Object> fallback = mcuGatewayService.getDefaultGPIOPins(homeId);
+                                return ResponseEntity.ok(ApiResponse.success(
+                                                "Danh sách GPIO mặc định (ESP32 chưa phản hồi kịp qua MQTT). Bạn vẫn có thể thêm thiết bị.",
+                                                fallback));
+                        }
                         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                                         .body(ApiResponse.error(
                                                         "Không thể kết nối với ESP32. Đảm bảo ESP32 đang online và kết nối MQTT.",
@@ -395,7 +408,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Toggle Automation Setting", description = "Toggle automation setting (AUTO_LIGHT, AUTO_FAN, AUTO_CLOSE_DOOR) on ESP32 via MQTT")
         @PostMapping("/home/{homeId}/automation/toggle")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId) or @homeService.hasHomePermissionByName(#homeId, 'DEVICE_CONTROL')")
         public ResponseEntity<ApiResponse<String>> toggleAutomation(
                         @PathVariable("homeId") Long homeId,
                         @RequestBody java.util.Map<String, Object> request) {
@@ -442,7 +455,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Set Automation Thresholds", description = "Set automation thresholds (lightThreshold, tempThreshold, gasThreshold) on ESP32 via MQTT. Use -1 to skip updating a threshold.")
         @PostMapping("/home/{homeId}/automation/config")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId) or @homeService.hasHomePermissionByName(#homeId, 'DEVICE_CONTROL')")
         public ResponseEntity<ApiResponse<String>> setAutomationConfig(
                         @PathVariable("homeId") Long homeId,
                         @RequestBody java.util.Map<String, Object> request) {
@@ -490,7 +503,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Get RFID Cards List", description = "Get list of RFID cards registered on ESP32 MCU Gateway")
         @GetMapping("/home/{homeId}/rfid/cards")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<RFIDCardsListResponse>> getRFIDCards(
                         @PathVariable("homeId") Long homeId) {
                 log.info("Getting RFID cards for homeId={}", homeId);
@@ -517,7 +530,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Get RFID Learning Status", description = "Check the status of RFID learning mode")
         @GetMapping("/home/{homeId}/rfid/learn/status")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<RFIDLearnStatusResponse>> getRFIDLearningStatus(
                         @PathVariable("homeId") Long homeId) {
                 log.debug("Getting RFID learning status for homeId={}", homeId);
@@ -586,7 +599,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Get RFID Access Logs", description = "Get paginated RFID access logs for a home")
         @GetMapping("/home/{homeId}/rfid/access-logs")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<Page<RFIDAccessLogResponse>>> getRFIDAccessLogs(
                         @PathVariable("homeId") Long homeId,
                         @RequestParam(defaultValue = "0") int page,
@@ -602,7 +615,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Get Recent RFID Access Logs", description = "Get 10 most recent RFID access logs for a home")
         @GetMapping("/home/{homeId}/rfid/access-logs/recent")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<java.util.List<RFIDAccessLogResponse>>> getRecentRFIDAccessLogs(
                         @PathVariable("homeId") Long homeId) {
                 log.debug("Getting recent RFID access logs for homeId={}", homeId);
@@ -615,7 +628,7 @@ public class MCUGatewayController {
          */
         @Operation(summary = "Get RFID Access Statistics", description = "Get RFID access statistics for a home")
         @GetMapping("/home/{homeId}/rfid/stats")
-        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeOwner(#homeId)")
+        @PreAuthorize("hasRole('ADMIN') or @homeService.isHomeMember(#homeId)")
         public ResponseEntity<ApiResponse<RFIDAccessStatsResponse>> getRFIDAccessStats(
                         @PathVariable("homeId") Long homeId) {
                 log.debug("Getting RFID access stats for homeId={}", homeId);

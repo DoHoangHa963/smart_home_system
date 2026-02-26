@@ -8,7 +8,7 @@ import com.example.smart_home_system.dto.response.UserResponse;
 import com.example.smart_home_system.service.implement.AuthServiceImpl;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.coyote.BadRequestException;
+import com.example.smart_home_system.exception.BadRequestException;
 import org.apache.coyote.Response;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -66,5 +66,23 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout() {
         authService.logout();
         return ResponseEntity.ok(ApiResponse.success("Logout successful", null));
+    }
+
+    @PostMapping(value = RequestApi.AUTH_FORGOT_PASSWORD)
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.requestPasswordReset(request);
+        return ResponseEntity.ok(ApiResponse.success("Mã xác thực đã được gửi đến email của bạn", null));
+    }
+
+    @PostMapping(value = RequestApi.AUTH_VERIFY_OTP)
+    public ResponseEntity<ApiResponse<Void>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        authService.verifyResetCode(request);
+        return ResponseEntity.ok(ApiResponse.success("Mã xác thực hợp lệ", null));
+    }
+
+    @PostMapping(value = RequestApi.AUTH_RESET_PASSWORD)
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Đặt lại mật khẩu thành công", null));
     }
 }

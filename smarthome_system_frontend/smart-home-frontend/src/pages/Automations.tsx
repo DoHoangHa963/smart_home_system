@@ -98,7 +98,11 @@ const AutomationCard = ({
 
 export default function Automations() {
     const { currentHome } = useHomeStore();
-    const { can } = usePermission();
+    const { can, isAdmin, isOwner } = usePermission();
+
+    // Permission checks
+    const canViewAutomation = isAdmin || isOwner || can(HOME_PERMISSIONS.AUTOMATION_VIEW);
+    const canControlAutomation = isAdmin || isOwner || can(HOME_PERMISSIONS.DEVICE_CONTROL);
 
     // State
     const [automationConfig, setAutomationConfig] = useState<AutomationConfig | null>(null);
@@ -361,6 +365,26 @@ export default function Automations() {
         };
     }, [currentHome?.id]);
 
+    // Permission guard
+    if (!canViewAutomation) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                        <Zap className="h-8 w-8 text-primary" />
+                        Tự động hóa
+                    </h1>
+                </div>
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                        Bạn không có quyền xem tính năng tự động hóa.
+                    </AlertDescription>
+                </Alert>
+            </div>
+        );
+    }
+
     // Render loading state
     if (isLoading) {
         return (
@@ -506,6 +530,16 @@ export default function Automations() {
 
             <Separator />
 
+            {/* View-only banner */}
+            {!canControlAutomation && (
+                <Alert className="bg-blue-50 border-blue-200">
+                    <AlertDescription className="text-blue-800 flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span>Bạn đang ở chế độ xem. Bạn có thể xem cấu hình tự động hóa nhưng không thể thay đổi.</span>
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {/* Automation Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {/* Auto Light */}
@@ -515,6 +549,7 @@ export default function Automations() {
                     enabled={automationConfig?.autoLightEnabled ?? false}
                     onToggle={() => toggleAutomation('AUTO_LIGHT', !automationConfig?.autoLightEnabled)}
                     loading={isTogglingLight}
+                    disabled={!canControlAutomation}
                     icon={<Lightbulb className="h-6 w-6 text-yellow-600" />}
                     iconBgColor="bg-yellow-100"
                     triggerInfo="Cảm biến chuyển động + cảm biến ánh sáng"
@@ -529,6 +564,7 @@ export default function Automations() {
                     enabled={automationConfig?.autoFanEnabled ?? false}
                     onToggle={() => toggleAutomation('AUTO_FAN', !automationConfig?.autoFanEnabled)}
                     loading={isTogglingFan}
+                    disabled={!canControlAutomation}
                     icon={<Fan className="h-6 w-6 text-blue-600" />}
                     iconBgColor="bg-blue-100"
                     triggerInfo="Cảm biến nhiệt độ DHT11 trong nhà"
@@ -543,112 +579,115 @@ export default function Automations() {
                     enabled={automationConfig?.autoCloseDoorEnabled ?? false}
                     onToggle={() => toggleAutomation('AUTO_CLOSE_DOOR', !automationConfig?.autoCloseDoorEnabled)}
                     loading={isTogglingDoor}
+                    disabled={!canControlAutomation}
                     icon={<DoorOpen className="h-6 w-6 text-green-600" />}
                     iconBgColor="bg-green-100"
                     triggerInfo="Cảm biến mưa"
                 />
             </div>
 
-            {/* Threshold Configuration Section */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <Settings2 className="h-5 w-5" />
-                        Cấu hình ngưỡng kích hoạt
-                    </CardTitle>
-                    <CardDescription>
-                        Điều chỉnh các ngưỡng để tự động hóa hoạt động phù hợp với môi trường của bạn
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid gap-6 md:grid-cols-3">
-                        {/* Light Threshold */}
-                        <div className="space-y-2">
-                            <Label htmlFor="lightThreshold" className="flex items-center gap-2">
-                                <Sun className="h-4 w-4 text-yellow-500" />
-                                Ngưỡng ánh sáng (LDR)
-                            </Label>
-                            <Input
-                                id="lightThreshold"
-                                type="number"
-                                min={0}
-                                max={4095}
-                                placeholder="0 - 4095"
-                                value={editLightThreshold}
-                                onChange={(e) => handleThresholdChange(e.target.value, setEditLightThreshold, 4095)}
-                                onBlur={() => handleThresholdBlur(editLightThreshold, setEditLightThreshold, 0, 4095)}
-                                disabled={isSavingConfig || !mcuStatus?.isOnline}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Bật đèn khi LDR &lt; ngưỡng. Giá trị thấp = bật sớm hơn.
-                            </p>
+            {/* Threshold Configuration Section - Only visible to users with DEVICE_CONTROL */}
+            {canControlAutomation && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Settings2 className="h-5 w-5" />
+                            Cấu hình ngưỡng kích hoạt
+                        </CardTitle>
+                        <CardDescription>
+                            Điều chỉnh các ngưỡng để tự động hóa hoạt động phù hợp với môi trường của bạn
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid gap-6 md:grid-cols-3">
+                            {/* Light Threshold */}
+                            <div className="space-y-2">
+                                <Label htmlFor="lightThreshold" className="flex items-center gap-2">
+                                    <Sun className="h-4 w-4 text-yellow-500" />
+                                    Ngưỡng ánh sáng (LDR)
+                                </Label>
+                                <Input
+                                    id="lightThreshold"
+                                    type="number"
+                                    min={0}
+                                    max={4095}
+                                    placeholder="0 - 4095"
+                                    value={editLightThreshold}
+                                    onChange={(e) => handleThresholdChange(e.target.value, setEditLightThreshold, 4095)}
+                                    onBlur={() => handleThresholdBlur(editLightThreshold, setEditLightThreshold, 0, 4095)}
+                                    disabled={isSavingConfig || !mcuStatus?.isOnline}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Bật đèn khi LDR &lt; ngưỡng. Giá trị thấp = bật sớm hơn.
+                                </p>
+                            </div>
+
+                            {/* Temperature Threshold */}
+                            <div className="space-y-2">
+                                <Label htmlFor="tempThreshold" className="flex items-center gap-2">
+                                    <Thermometer className="h-4 w-4 text-red-500" />
+                                    Ngưỡng nhiệt độ (°C)
+                                </Label>
+                                <Input
+                                    id="tempThreshold"
+                                    type="number"
+                                    min={15}
+                                    max={50}
+                                    placeholder="15 - 50"
+                                    value={editTempThreshold}
+                                    onChange={(e) => handleThresholdChange(e.target.value, setEditTempThreshold, 50)}
+                                    onBlur={() => handleThresholdBlur(editTempThreshold, setEditTempThreshold, 15, 50)}
+                                    disabled={isSavingConfig || !mcuStatus?.isOnline}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Bật quạt khi nhiệt độ &gt; ngưỡng.
+                                </p>
+                            </div>
+
+                            {/* Gas Threshold */}
+                            <div className="space-y-2">
+                                <Label htmlFor="gasThreshold" className="flex items-center gap-2">
+                                    <AlertCircle className="h-4 w-4 text-orange-500" />
+                                    Ngưỡng cảnh báo Gas
+                                </Label>
+                                <Input
+                                    id="gasThreshold"
+                                    type="number"
+                                    min={0}
+                                    max={4095}
+                                    placeholder="0 - 4095"
+                                    value={editGasThreshold}
+                                    onChange={(e) => handleThresholdChange(e.target.value, setEditGasThreshold, 4095)}
+                                    onBlur={() => handleThresholdBlur(editGasThreshold, setEditGasThreshold, 0, 4095)}
+                                    disabled={isSavingConfig || !mcuStatus?.isOnline}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Cảnh báo khi MQ2 &gt; ngưỡng.
+                                </p>
+                            </div>
                         </div>
 
-                        {/* Temperature Threshold */}
-                        <div className="space-y-2">
-                            <Label htmlFor="tempThreshold" className="flex items-center gap-2">
-                                <Thermometer className="h-4 w-4 text-red-500" />
-                                Ngưỡng nhiệt độ (°C)
-                            </Label>
-                            <Input
-                                id="tempThreshold"
-                                type="number"
-                                min={15}
-                                max={50}
-                                placeholder="15 - 50"
-                                value={editTempThreshold}
-                                onChange={(e) => handleThresholdChange(e.target.value, setEditTempThreshold, 50)}
-                                onBlur={() => handleThresholdBlur(editTempThreshold, setEditTempThreshold, 15, 50)}
+                        <div className="mt-6 flex justify-end">
+                            <Button
+                                onClick={saveThresholds}
                                 disabled={isSavingConfig || !mcuStatus?.isOnline}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Bật quạt khi nhiệt độ &gt; ngưỡng.
-                            </p>
+                            >
+                                {isSavingConfig ? (
+                                    <>
+                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                        Đang lưu...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="h-4 w-4 mr-2" />
+                                        Lưu cấu hình
+                                    </>
+                                )}
+                            </Button>
                         </div>
-
-                        {/* Gas Threshold */}
-                        <div className="space-y-2">
-                            <Label htmlFor="gasThreshold" className="flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-orange-500" />
-                                Ngưỡng cảnh báo Gas
-                            </Label>
-                            <Input
-                                id="gasThreshold"
-                                type="number"
-                                min={0}
-                                max={4095}
-                                placeholder="0 - 4095"
-                                value={editGasThreshold}
-                                onChange={(e) => handleThresholdChange(e.target.value, setEditGasThreshold, 4095)}
-                                onBlur={() => handleThresholdBlur(editGasThreshold, setEditGasThreshold, 0, 4095)}
-                                disabled={isSavingConfig || !mcuStatus?.isOnline}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Cảnh báo khi MQ2 &gt; ngưỡng.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="mt-6 flex justify-end">
-                        <Button
-                            onClick={saveThresholds}
-                            disabled={isSavingConfig || !mcuStatus?.isOnline}
-                        >
-                            {isSavingConfig ? (
-                                <>
-                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                    Đang lưu...
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="h-4 w-4 mr-2" />
-                                    Lưu cấu hình
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Info Section */}
             <Card className="bg-muted/30">

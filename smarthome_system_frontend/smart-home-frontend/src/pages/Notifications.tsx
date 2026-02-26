@@ -24,7 +24,7 @@ import { webSocketService } from '@/lib/websocket';
 export default function Notifications() {
   const { currentHome } = useHomeStore();
   const { can, hasHomeAccess, isAdmin } = usePermission();
-  const canViewNotifications = isAdmin || can(HOME_PERMISSIONS.HOME_LOGS_VIEW);
+  const canViewNotifications = isAdmin || hasHomeAccess;
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,7 +96,7 @@ export default function Notifications() {
           description: 'Danh sách thông báo đã được cập nhật.',
           duration: 3000,
         });
-        
+
         // Refetch notifications to show the new active emergency
         fetchNotifications();
         fetchUnreadCount();

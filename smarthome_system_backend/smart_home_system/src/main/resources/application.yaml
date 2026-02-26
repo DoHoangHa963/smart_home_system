@@ -6,8 +6,12 @@ server:
 
 app:
   base-url: http://localhost:8080
+  mail:
+    enabled: true  # Gửi mail thật khi đã cấu hình SMTP / App Password
   mcu:
     heartbeat-check-interval-ms: 120000  # 2 phút: đánh dấu MCU offline nếu không có heartbeat/LWT
+    # Tối ưu lưu device_metrics: sampling + batch
+    metric-sampling-interval-seconds: 120  # Chỉ lưu metrics mỗi 2 phút (ESP32 gửi mỗi 30s)
 
 spring:
   datasource:
@@ -60,6 +64,19 @@ spring:
       max-file-size: 5MB
       max-request-size: 10MB
 
+  # Gmail SMTP (dùng App Password). Production: dùng env, ví dụ password: ${MAIL_PASSWORD}
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: "tranhaianhh0005@gmail.com"
+    password: "qsor hyhg kpzy ygic"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 logging:
   level:
     org.springframework.security: WARN  # Giảm từ DEBUG xuống WARN để giảm log
@@ -86,7 +103,7 @@ file:
   allowed-extensions: jpg,jpeg,png,gif
 
 mqtt:
-  broker-url: tcp://192.168.0.200:1883
+  broker-url: tcp://192.168.0.198:1883
   client-id: smarthome-backend
   username: ""  # Leave empty for no auth
   password: ""
